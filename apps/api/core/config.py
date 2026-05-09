@@ -45,5 +45,10 @@ class Settings(BaseSettings):
             return [s.strip() for s in v.split(",") if s.strip()]
         return v
 
+    @property
+    def postgres_dsn(self) -> str:
+        """psycopg-style DSN (without SQLAlchemy +driver suffix)."""
+        return self.database_url.replace("postgresql+asyncpg://", "postgresql://")
+
 
 settings = Settings()

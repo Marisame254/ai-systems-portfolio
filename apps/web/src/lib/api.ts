@@ -19,12 +19,12 @@ export type ChatStreamEvent =
 
 export async function* streamChat(
   message: string,
-  history: Array<{ role: string; content: string }> = []
+  threadId: string
 ): AsyncGenerator<ChatStreamEvent> {
   const res = await fetch(`${API_BASE}/api/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, history }),
+    body: JSON.stringify({ message, thread_id: threadId }),
   })
 
   if (!res.ok) throw new Error(`API error: ${res.status}`)
@@ -108,6 +108,65 @@ export interface AgentGraph {
 
 export async function getAgentGraph(): Promise<AgentGraph> {
   const res = await fetch(`${API_BASE}/api/agents/graph`)
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  return res.json()
+}
+
+// === Threads & state inspection ===
+
+export interface ThreadSummary {
+  thread_id: string
+  title: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface SerializedToolCall {
+  name: string
+  args: unknown
+  id?: string
+}
+
+export interface SerializedMessage {
+  type: 'human' | 'ai' | 'tool' | 'system' | string
+  content: string
+  tool_calls?: SerializedToolCall[]
+  tool_call_id?: string
+  name?: string
+}
+
+export interface ThreadState {
+  thread_id: string
+  values: { messages: SerializedMessage[] }
+  next: string[]
+  checkpoint_id: string | null
+  created_at: string | null
+}
+
+export interface ThreadHistory {
+  thread_id: string
+  checkpoints: Omit<ThreadState, 'thread_id'>[]
+}
+
+export async function listThreads(): Promise<ThreadSummary[]> {
+  const res = await fetch(`${API_BASE}/api/agents/threads`)
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  return res.json()
+}
+
+export async function deleteThread(threadId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/agents/threads/${threadId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+}
+
+export async function getThreadState(threadId: string): Promise<ThreadState> {
+  const res = await fetch(`${API_BASE}/api/agents/state/${threadId}`)
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  return res.json()
+}
+
+export async function getThreadHistory(threadId: string): Promise<ThreadHistory> {
+  const res = await fetch(`${API_BASE}/api/agents/state/${threadId}/history`)
   if (!res.ok) throw new Error(`API error: ${res.status}`)
   return res.json()
 }

@@ -12,8 +12,19 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import Link from 'next/link'
 import { getAgentGraph, type AgentGraph, type AgentGraphNode } from '@/lib/api'
-import { AlertCircle, Loader2, X, Hammer, Bot, Flag, FlagOff, ChevronDown } from 'lucide-react'
+import {
+  AlertCircle,
+  Activity,
+  Loader2,
+  X,
+  Hammer,
+  Bot,
+  Flag,
+  FlagOff,
+  ChevronDown,
+} from 'lucide-react'
 
 const TYPE_COLOR: Record<string, string> = {
   start: '#00ff88',
@@ -332,7 +343,7 @@ export default function AgentsPage() {
         )}
       </div>
 
-      <div className="mt-4 rounded-lg border border-border bg-surface p-4">
+      <div className="mt-4 flex items-center justify-between gap-4 rounded-lg border border-border bg-surface p-4">
         <p className="font-mono text-xs leading-relaxed text-text-muted">
           <span className="text-accent-green">{'>'}</span> Click any node to inspect it: see the
           model and system prompt for <span className="text-accent-cyan">agent</span>, the bound
@@ -340,6 +351,13 @@ export default function AgentsPage() {
           role of <span className="text-accent-green">__start__</span> /{' '}
           <span className="text-accent-green">__end__</span> in the LangGraph runtime.
         </p>
+        <Link
+          href="/demos/state"
+          className="flex shrink-0 items-center gap-1.5 rounded-md border border-accent-cyan/30 bg-accent-cyan/5 px-3 py-1.5 font-mono text-xs text-accent-cyan transition-colors hover:bg-accent-cyan/10"
+        >
+          <Activity className="h-3 w-3" />
+          inspect state →
+        </Link>
       </div>
     </div>
   )

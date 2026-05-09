@@ -1,6 +1,8 @@
 from functools import lru_cache
 
+from fastapi import Request
 from langchain_core.language_models import BaseChatModel
+from langgraph.graph.state import CompiledStateGraph
 
 from core.config import settings
 
@@ -22,3 +24,8 @@ def get_chat_model() -> BaseChatModel:
         model=settings.ollama_model,
         base_url=settings.ollama_base_url,
     )
+
+
+def get_chat_agent(request: Request) -> CompiledStateGraph:
+    """Resolved at request-time from FastAPI app.state (built in lifespan)."""
+    return request.app.state.chat_agent

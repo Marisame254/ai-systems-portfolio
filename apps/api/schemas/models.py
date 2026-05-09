@@ -10,7 +10,8 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
-    history: list[ChatMessage] = []
+    thread_id: str
+    history: list[ChatMessage] = []  # legacy, ignored when checkpointer is active
 
 
 class RAGQueryRequest(BaseModel):

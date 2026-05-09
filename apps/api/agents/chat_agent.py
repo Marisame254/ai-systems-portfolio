@@ -1,14 +1,11 @@
-from functools import lru_cache
-
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from agents.state import AgentState
-from agents.tools import build_tools
-from core.dependencies import get_chat_model
 
 SYSTEM_PROMPT = (
     "You are an AI assistant on Marisame's portfolio site. "
@@ -23,7 +20,11 @@ SYSTEM_PROMPT = (
 )
 
 
-def build_chat_graph(model: BaseChatModel, tools: list[BaseTool]) -> CompiledStateGraph:
+def build_chat_graph(
+    model: BaseChatModel,
+    tools: list[BaseTool],
+    checkpointer: BaseCheckpointSaver | None = None,
+) -> CompiledStateGraph:
     bound_model = model.bind_tools(tools) if tools else model
 
     async def agent_node(state: AgentState) -> dict:
@@ -41,9 +42,4 @@ def build_chat_graph(model: BaseChatModel, tools: list[BaseTool]) -> CompiledSta
     else:
         graph.add_edge("agent", END)
 
-    return graph.compile()
-
-
-@lru_cache(maxsize=1)
-def get_chat_agent() -> CompiledStateGraph:
-    return build_chat_graph(get_chat_model(), build_tools())
+    return graph.compile(checkpointer=checkpointer)

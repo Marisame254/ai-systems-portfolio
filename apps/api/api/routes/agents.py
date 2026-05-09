@@ -1,10 +1,14 @@
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, Request
+from langgraph.graph.state import CompiledStateGraph
 
-from agents.chat_agent import SYSTEM_PROMPT, get_chat_agent
+from agents.chat_agent import SYSTEM_PROMPT
+from agents.serialize import serialize_state
 from agents.tools import build_tools
 from core.config import settings
+from core.dependencies import get_chat_agent
+from services.threads import delete_thread_row, list_threads
 
 router = APIRouter()
 
@@ -30,17 +34,12 @@ def _node_meta(node_id: str) -> dict[str, Any]:
         }
     if node_id == "__end__":
         return {
-            "description": (
-                "Graph terminal node. Returns the final messages list to the caller."
-            )
+            "description": "Graph terminal node. Returns the final messages list to the caller."
         }
     if node_id == "tools":
         return {
             "tools": [
-                {
-                    "name": t.name,
-                    "description": (t.description or "").strip(),
-                }
+                {"name": t.name, "description": (t.description or "").strip()}
                 for t in build_tools()
             ]
         }
@@ -55,8 +54,8 @@ def _node_meta(node_id: str) -> dict[str, Any]:
 
 
 @router.get("/graph")
-async def get_graph():
-    graph = get_chat_agent().get_graph()
+async def get_graph(agent: CompiledStateGraph = Depends(get_chat_agent)):
+    graph = agent.get_graph()
 
     nodes = [
         {
@@ -78,3 +77,52 @@ async def get_graph():
         edges.append(item)
 
     return {"nodes": nodes, "edges": edges}
+
+
+@router.get("/threads")
+async def threads_list(http_request: Request):
+    pool = http_request.app.state.checkpoint_pool
+    return await list_threads(pool)
+
+
+@router.delete("/threads/{thread_id}")
+async def threads_delete(
+    thread_id: str,
+    http_request: Request,
+    agent: CompiledStateGraph = Depends(get_chat_agent),
+):
+    pool = http_request.app.state.checkpoint_pool
+    # langgraph 1.x: adelete_thread on the checkpointer
+    checkpointer = agent.checkpointer
+    if checkpointer is not None:
+        try:
+            await checkpointer.adelete_thread(thread_id)
+        except AttributeError:
+            # older variants may use .delete_thread
+            pass
+    await delete_thread_row(pool, thread_id)
+    return {"ok": True}
+
+
+@router.get("/state/{thread_id}")
+async def thread_state(
+    thread_id: str,
+    agent: CompiledStateGraph = Depends(get_chat_agent),
+):
+    config = {"configurable": {"thread_id": thread_id}}
+    state = await agent.aget_state(config)
+    if not state.values:
+        raise HTTPException(status_code=404, detail="Thread not found or empty")
+    return {"thread_id": thread_id, **serialize_state(state)}
+
+
+@router.get("/state/{thread_id}/history")
+async def thread_history(
+    thread_id: str,
+    agent: CompiledStateGraph = Depends(get_chat_agent),
+):
+    config = {"configurable": {"thread_id": thread_id}}
+    snapshots = []
+    async for snap in agent.aget_state_history(config):
+        snapshots.append(serialize_state(snap))
+    return {"thread_id": thread_id, "checkpoints": snapshots}

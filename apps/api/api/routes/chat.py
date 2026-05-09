@@ -1,13 +1,15 @@
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph.state import CompiledStateGraph
 
-from agents.chat_agent import SYSTEM_PROMPT, get_chat_agent
+from agents.chat_agent import SYSTEM_PROMPT
 from core.config import settings
+from core.dependencies import get_chat_agent
 from schemas.models import ChatRequest
+from services.threads import upsert_thread
 
 router = APIRouter()
 
@@ -19,24 +21,37 @@ async def chat_info():
     return {"provider": "ollama", "model": settings.ollama_model, "environment": "dev"}
 
 
-ROLE_TO_MSG = {"user": HumanMessage, "assistant": AIMessage}
-
 TOOL_RESULT_PREVIEW_CHARS = 500
+TITLE_MAX_CHARS = 60
 
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
-async def generate_stream(agent: CompiledStateGraph, request: ChatRequest):
-    messages = [SystemMessage(content=SYSTEM_PROMPT)]
-    messages.extend(ROLE_TO_MSG[m.role](content=m.content) for m in request.history)
-    messages.append(HumanMessage(content=request.message))
+async def generate_stream(
+    agent: CompiledStateGraph,
+    pool,
+    request: ChatRequest,
+):
+    config = {
+        "configurable": {"thread_id": request.thread_id},
+        "recursion_limit": settings.agent_max_iterations * 2 + 2,
+    }
 
-    config = {"recursion_limit": settings.agent_max_iterations * 2 + 2}
+    # Decide whether this is a new thread (no prior state) or a continuation.
+    state = await agent.aget_state(config)
+    is_new = not (state.values and state.values.get("messages"))
+
+    if is_new:
+        new_messages = [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=request.message)]
+        title = request.message[:TITLE_MAX_CHARS]
+    else:
+        new_messages = [HumanMessage(content=request.message)]
+        title = None
 
     async for event in agent.astream_events(
-        {"messages": messages},
+        {"messages": new_messages},
         config=config,
         version="v2",
     ):
@@ -70,16 +85,19 @@ async def generate_stream(agent: CompiledStateGraph, request: ChatRequest):
                 }
             )
 
+    await upsert_thread(pool, request.thread_id, title=title)
     yield "data: [DONE]\n\n"
 
 
 @router.post("/stream")
 async def stream_chat(
     request: ChatRequest,
+    http_request: Request,
     agent: CompiledStateGraph = Depends(get_chat_agent),
 ):
+    pool = http_request.app.state.checkpoint_pool
     return StreamingResponse(
-        generate_stream(agent, request),
+        generate_stream(agent, pool, request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
