@@ -36,6 +36,30 @@ async def list_threads(pool: AsyncConnectionPool, limit: int = 50) -> list[dict[
     ]
 
 
+async def list_threads_by_ids(
+    pool: AsyncConnectionPool, ids: list[str], limit: int = 50
+) -> list[dict[str, Any]]:
+    if not ids:
+        return []
+    async with pool.connection() as conn, conn.cursor() as cur:
+        await cur.execute(
+            "SELECT thread_id, title, created_at, updated_at "
+            "FROM chat_threads WHERE thread_id = ANY(%s) "
+            "ORDER BY updated_at DESC LIMIT %s",
+            (ids, limit),
+        )
+        rows = await cur.fetchall()
+    return [
+        {
+            "thread_id": r[0],
+            "title": r[1],
+            "created_at": r[2].isoformat() if r[2] else None,
+            "updated_at": r[3].isoformat() if r[3] else None,
+        }
+        for r in rows
+    ]
+
+
 async def upsert_thread(
     pool: AsyncConnectionPool, thread_id: str, title: str | None = None
 ) -> None:

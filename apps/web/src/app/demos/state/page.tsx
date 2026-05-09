@@ -5,12 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   getThreadHistory,
   getThreadState,
-  listThreads,
+  listThreadsByIds,
   type SerializedMessage,
   type ThreadHistory,
   type ThreadState,
   type ThreadSummary,
 } from '@/lib/api'
+import { loadThreadIds } from '@/lib/thread-store'
 import { MessageBubble, type ChatMessageView, type ToolCall } from '@/components/chat/message-bubble'
 import { AlertCircle, Clock, Layers, Loader2 } from 'lucide-react'
 
@@ -50,10 +51,13 @@ function StatePageInner() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    listThreads().then((t) => {
-      setThreads(t)
-      if (!activeThread && t.length) setActiveThread(t[0].thread_id)
-    }).catch(() => {})
+    const ids = loadThreadIds()
+    listThreadsByIds(ids)
+      .then((t) => {
+        setThreads(t)
+        if (!activeThread && t.length) setActiveThread(t[0].thread_id)
+      })
+      .catch(() => {})
   }, [activeThread])
 
   const load = useCallback(async (threadId: string) => {

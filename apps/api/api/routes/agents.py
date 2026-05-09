@@ -2,13 +2,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from langgraph.graph.state import CompiledStateGraph
+from pydantic import BaseModel
 
 from agents.chat_agent import SYSTEM_PROMPT
 from agents.serialize import serialize_state
 from agents.tools import build_tools
 from core.config import settings
 from core.dependencies import get_chat_agent
-from services.threads import delete_thread_row, list_threads
+from services.threads import delete_thread_row, list_threads_by_ids
 
 router = APIRouter()
 
@@ -79,10 +80,14 @@ async def get_graph(agent: CompiledStateGraph = Depends(get_chat_agent)):
     return {"nodes": nodes, "edges": edges}
 
 
-@router.get("/threads")
-async def threads_list(http_request: Request):
+class ThreadIdsBody(BaseModel):
+    thread_ids: list[str] = []
+
+
+@router.post("/threads/list")
+async def threads_list(body: ThreadIdsBody, http_request: Request):
     pool = http_request.app.state.checkpoint_pool
-    return await list_threads(pool)
+    return await list_threads_by_ids(pool, body.thread_ids)
 
 
 @router.delete("/threads/{thread_id}")

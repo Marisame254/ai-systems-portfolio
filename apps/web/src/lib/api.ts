@@ -148,8 +148,13 @@ export interface ThreadHistory {
   checkpoints: Omit<ThreadState, 'thread_id'>[]
 }
 
-export async function listThreads(): Promise<ThreadSummary[]> {
-  const res = await fetch(`${API_BASE}/api/agents/threads`)
+export async function listThreadsByIds(ids: string[]): Promise<ThreadSummary[]> {
+  if (ids.length === 0) return []
+  const res = await fetch(`${API_BASE}/api/agents/threads/list`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ thread_ids: ids }),
+  })
   if (!res.ok) throw new Error(`API error: ${res.status}`)
   return res.json()
 }

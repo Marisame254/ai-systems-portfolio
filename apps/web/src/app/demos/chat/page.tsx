@@ -5,15 +5,21 @@ import Link from 'next/link'
 import {
   streamChat,
   getChatInfo,
-  listThreads,
+  listThreadsByIds,
   deleteThread,
   getThreadState,
   type ChatInfo,
   type ThreadSummary,
   type SerializedMessage,
 } from '@/lib/api'
+import {
+  loadThreadIds,
+  addThreadId,
+  removeThreadId,
+  MAX_THREADS,
+} from '@/lib/thread-store'
 import { MessageBubble, type ChatMessageView, type ToolCall } from '@/components/chat/message-bubble'
-import { Send, Bot, Plus, Trash2, MessageSquare, Activity } from 'lucide-react'
+import { Send, Bot, Plus, Trash2, MessageSquare, Activity, AlertTriangle } from 'lucide-react'
 
 function newThreadId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
@@ -63,8 +69,9 @@ function hydrateMessages(serialized: SerializedMessage[]): ChatMessageView[] {
 
 export default function ChatPage() {
   const [info, setInfo] = useState<ChatInfo | null>(null)
+  const [threadIds, setThreadIds] = useState<string[]>([])
   const [threads, setThreads] = useState<ThreadSummary[]>([])
-  const [activeThreadId, setActiveThreadId] = useState<string>(() => newThreadId())
+  const [activeThreadId, setActiveThreadId] = useState<string>('')
   const [messages, setMessages] = useState<ChatMessageView[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -79,16 +86,19 @@ export default function ChatPage() {
     getChatInfo().then(setInfo).catch(() => {})
   }, [])
 
-  const refreshThreads = useCallback(async () => {
+  const refreshThreads = useCallback(async (ids: string[]) => {
     try {
-      setThreads(await listThreads())
+      setThreads(await listThreadsByIds(ids))
     } catch {
       // backend down — keep current
     }
   }, [])
 
   useEffect(() => {
-    refreshThreads()
+    const ids = loadThreadIds()
+    setThreadIds(ids)
+    setActiveThreadId(ids[0] ?? newThreadId())
+    refreshThreads(ids)
   }, [refreshThreads])
 
   const selectThread = useCallback(async (threadId: string) => {
@@ -113,15 +123,17 @@ export default function ChatPage() {
   const handleDeleteThread = useCallback(
     async (threadId: string, e: React.MouseEvent) => {
       e.stopPropagation()
+      const nextIds = removeThreadId(threadId)
+      setThreadIds(nextIds)
       try {
         await deleteThread(threadId)
-        if (threadId === activeThreadId) {
-          startNewChat()
-        }
-        await refreshThreads()
       } catch {
         // swallow
       }
+      if (threadId === activeThreadId) {
+        startNewChat()
+      }
+      await refreshThreads(nextIds)
     },
     [activeThreadId, startNewChat, refreshThreads]
   )
@@ -159,7 +171,21 @@ export default function ChatPage() {
           return updated
         })
       }
-      await refreshThreads()
+      const wasRegistered = loadThreadIds().includes(activeThreadId)
+      if (!wasRegistered) {
+        const { ids, evicted } = addThreadId(activeThreadId)
+        setThreadIds(ids)
+        if (evicted) {
+          try {
+            await deleteThread(evicted)
+          } catch {
+            // swallow
+          }
+        }
+        await refreshThreads(ids)
+      } else {
+        await refreshThreads(loadThreadIds())
+      }
     } catch {
       setMessages((prev) => {
         const updated = [...prev]
@@ -274,6 +300,12 @@ export default function ChatPage() {
           <div ref={bottomRef} />
         </div>
 
+        {threadIds.length >= MAX_THREADS && !threadIds.includes(activeThreadId) && (
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-1.5 font-mono text-[11px] text-yellow-300">
+            <AlertTriangle className="h-3 w-3" />
+            max {MAX_THREADS} threads — sending will evict oldest
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="mt-3 flex gap-3">
           <input
             type="text"
