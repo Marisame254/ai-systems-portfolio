@@ -5,7 +5,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   useNodesState,
   useEdgesState,
   type Node,
@@ -61,7 +60,7 @@ function mapToReactFlow(graph: AgentGraph): { nodes: Node[]; edges: Edge[] } {
 
   const edges: Edge[] = graph.edges.map((e, i) => {
     const isConditional = !!e.conditional
-    const stroke = isConditional ? '#00d4ff' : '#2a2a2a'
+    const stroke = isConditional ? '#00d4ff' : '#475569'
     return {
       id: `e${i}`,
       source: e.source,
@@ -72,8 +71,11 @@ function mapToReactFlow(graph: AgentGraph): { nodes: Node[]; edges: Edge[] } {
       labelStyle: {
         fontSize: 10,
         fontFamily: 'monospace',
-        fill: stroke,
+        fontWeight: 600,
+        fill: '#cbd5e1',
       },
+      labelBgStyle: { fill: '#0a0a0a', fillOpacity: 0.85 },
+      labelBgPadding: [4, 2] as [number, number],
     }
   })
 
@@ -171,10 +173,6 @@ export default function AgentsPage() {
                 border: '1px solid #2a2a2a',
                 color: '#94a3b8',
               }}
-            />
-            <MiniMap
-              style={{ background: '#111111', border: '1px solid #2a2a2a' }}
-              nodeColor="#2a2a2a"
             />
           </ReactFlow>
         )}

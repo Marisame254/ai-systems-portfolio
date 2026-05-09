@@ -1,8 +1,81 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { streamChat, getChatInfo, type ChatInfo } from '@/lib/api'
 import { Send, Bot, User, Trash2, Search, ChevronDown, ChevronRight } from 'lucide-react'
+
+const markdownComponents = {
+  p: (props: React.HTMLAttributes<HTMLParagraphElement>) => (
+    <p className="mb-2 last:mb-0" {...props} />
+  ),
+  ul: (props: React.HTMLAttributes<HTMLUListElement>) => (
+    <ul className="mb-2 ml-5 list-disc space-y-1 last:mb-0" {...props} />
+  ),
+  ol: (props: React.HTMLAttributes<HTMLOListElement>) => (
+    <ol className="mb-2 ml-5 list-decimal space-y-1 last:mb-0" {...props} />
+  ),
+  li: (props: React.HTMLAttributes<HTMLLIElement>) => <li className="leading-relaxed" {...props} />,
+  a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a
+      className="text-accent-cyan underline-offset-2 hover:underline"
+      target="_blank"
+      rel="noreferrer"
+      {...props}
+    />
+  ),
+  strong: (props: React.HTMLAttributes<HTMLElement>) => (
+    <strong className="font-semibold text-text-primary" {...props} />
+  ),
+  em: (props: React.HTMLAttributes<HTMLElement>) => <em className="italic" {...props} />,
+  h1: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h1 className="mb-2 mt-3 text-base font-semibold text-text-primary" {...props} />
+  ),
+  h2: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h2 className="mb-2 mt-3 text-sm font-semibold text-text-primary" {...props} />
+  ),
+  h3: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h3 className="mb-1 mt-2 text-sm font-semibold text-text-secondary" {...props} />
+  ),
+  code: ({
+    inline,
+    className,
+    children,
+    ...props
+  }: React.HTMLAttributes<HTMLElement> & { inline?: boolean }) => {
+    if (inline) {
+      return (
+        <code
+          className="rounded bg-surface px-1.5 py-0.5 font-mono text-[0.85em] text-accent-green"
+          {...props}
+        >
+          {children}
+        </code>
+      )
+    }
+    return (
+      <code className={`font-mono text-xs ${className ?? ''}`} {...props}>
+        {children}
+      </code>
+    )
+  },
+  pre: (props: React.HTMLAttributes<HTMLPreElement>) => (
+    <pre
+      className="my-2 overflow-x-auto rounded-md border border-border bg-[#0a0a0a] p-3 text-xs leading-relaxed"
+      {...props}
+    />
+  ),
+  blockquote: (props: React.HTMLAttributes<HTMLQuoteElement>) => (
+    <blockquote
+      className="my-2 border-l-2 border-accent-green/40 pl-3 italic text-text-secondary"
+      {...props}
+    />
+  ),
+}
+
+function MarkdownContent({ text }: { text: string }) {
+  return <ReactMarkdown components={markdownComponents}>{text}</ReactMarkdown>
+}
 
 interface ToolCall {
   name: string
@@ -180,9 +253,15 @@ export default function ChatPage() {
               {msg.toolCalls?.map((call, j) => (
                 <ToolCallChip key={j} call={call} />
               ))}
-              {msg.content || (!msg.toolCalls?.length && (
+              {msg.content ? (
+                msg.role === 'assistant' ? (
+                  <MarkdownContent text={msg.content} />
+                ) : (
+                  msg.content
+                )
+              ) : !msg.toolCalls?.length ? (
                 <span className="text-text-muted">...</span>
-              ))}
+              ) : null}
               {isStreaming && i === messages.length - 1 && msg.role === 'assistant' && (
                 <span className="ml-0.5 animate-cursor-blink text-accent-green">█</span>
               )}
