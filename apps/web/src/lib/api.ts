@@ -74,7 +74,26 @@ export async function uploadDocument(file: File) {
   return res.json()
 }
 
-export async function getAgentGraph() {
+export interface AgentGraphNode {
+  id: string
+  label: string
+  type: 'start' | 'end' | 'tool' | 'llm' | string
+}
+
+export interface AgentGraphEdge {
+  source: string
+  target: string
+  conditional?: boolean
+  condition?: string
+}
+
+export interface AgentGraph {
+  nodes: AgentGraphNode[]
+  edges: AgentGraphEdge[]
+}
+
+export async function getAgentGraph(): Promise<AgentGraph> {
   const res = await fetch(`${API_BASE}/api/agents/graph`)
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
   return res.json()
 }
