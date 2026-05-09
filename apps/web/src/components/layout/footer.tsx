@@ -5,7 +5,7 @@ export function Footer() {
         <span className="text-accent-green">{'>'}</span> built by{' '}
         <span className="text-text-secondary">Marisame</span> with{' '}
         <span className="text-accent-cyan">LangGraph</span> ·{' '}
-        <span className="text-accent-cyan">Claude</span> ·{' '}
+        <span className="text-accent-cyan">LangChain</span> ·{' '}
         <span className="text-accent-cyan">Next.js</span>
       </p>
     </footer>

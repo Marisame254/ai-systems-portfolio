@@ -1,5 +1,17 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+export interface ChatInfo {
+  provider: 'ollama' | 'openai'
+  model: string
+  environment: 'dev' | 'prod'
+}
+
+export async function getChatInfo(): Promise<ChatInfo> {
+  const res = await fetch(`${API_BASE}/api/chat/info`)
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  return res.json()
+}
+
 export async function* streamChat(
   message: string,
   history: Array<{ role: string; content: string }> = []

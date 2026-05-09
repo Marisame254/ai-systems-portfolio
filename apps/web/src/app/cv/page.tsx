@@ -8,7 +8,7 @@ const skills: Record<string, string[]> = {
   'Languages & Frameworks': ['Python', 'TypeScript', 'FastAPI', 'Next.js', 'React'],
   'AI & ML': [
     'LangGraph',
-    'Anthropic Claude',
+    'LLM Providers (OpenAI, Ollama, Anthropic)',
     'RAG Systems',
     'Multi-Agent Architectures',
     'pgvector',
@@ -26,7 +26,7 @@ const experience = [
     points: [
       'Designed and implemented multi-agent orchestration systems using LangGraph with complex conditional edge routing.',
       'Built production RAG pipelines with pgvector similarity search and hybrid retrieval strategies.',
-      'Integrated Anthropic Claude APIs with streaming responses, tool use, and structured output parsing.',
+      'Integrated multiple LLM providers (OpenAI, Ollama, Anthropic) with streaming responses, tool use, and structured output parsing.',
       'Architected FastAPI backends with async SSE endpoints delivering sub-100ms time-to-first-token.',
       'Managed full monorepo environments with Turborepo, pnpm workspaces, and uv for Python.',
     ],

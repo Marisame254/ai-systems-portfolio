@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { streamChat } from '@/lib/api'
+import { streamChat, getChatInfo, type ChatInfo } from '@/lib/api'
 import { Send, Bot, User, Trash2 } from 'lucide-react'
 
 interface Message {
@@ -13,11 +13,18 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+  const [info, setInfo] = useState<ChatInfo | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    getChatInfo()
+      .then(setInfo)
+      .catch(() => {})
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -63,7 +70,11 @@ export default function ChatPage() {
             // ai_chat_playground
           </p>
           <h1 className="text-2xl font-bold text-text-primary">AI Chat</h1>
-          <p className="text-sm text-text-secondary">Powered by Claude claude-sonnet-4-6 · streaming SSE</p>
+          <p className="text-sm text-text-secondary">
+            {info
+              ? `Powered by ${info.provider === 'openai' ? 'OpenAI' : 'Ollama'} ${info.model} · streaming SSE`
+              : 'streaming SSE'}
+          </p>
         </div>
         {messages.length > 0 && (
           <button

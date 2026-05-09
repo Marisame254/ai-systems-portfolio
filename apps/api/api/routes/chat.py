@@ -5,10 +5,18 @@ from fastapi.responses import StreamingResponse
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from core.config import settings
 from core.dependencies import get_chat_model
 from schemas.models import ChatRequest
 
 router = APIRouter()
+
+
+@router.get("/info")
+async def chat_info():
+    if settings.environment == "prod":
+        return {"provider": "openai", "model": settings.openai_model, "environment": "prod"}
+    return {"provider": "ollama", "model": settings.ollama_model, "environment": "dev"}
 
 SYSTEM_PROMPT = (
     "You are an AI assistant on Marisame's portfolio site. "

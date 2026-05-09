@@ -45,7 +45,7 @@ export default function RAGPage() {
       setResult({
         answer: 'Error: Could not connect to the API. Is the backend running?',
         sources: [],
-        model: 'claude-sonnet-4-6',
+        model: 'unknown',
       })
     } finally {
       setIsQuerying(false)
@@ -60,7 +60,7 @@ export default function RAGPage() {
         </p>
         <h1 className="text-2xl font-bold text-text-primary">RAG Demo</h1>
         <p className="text-sm text-text-secondary">
-          Upload a document, then ask questions. Powered by pgvector + Claude.
+          Upload a document, then ask questions. Powered by pgvector + LangChain LLM.
         </p>
       </div>
 

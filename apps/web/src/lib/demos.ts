@@ -13,7 +13,7 @@ export interface Demo {
 export const demos: Demo[] = [
   {
     title: 'AI Chat Playground',
-    description: 'Streaming chat powered by Claude claude-sonnet-4-6 with real-time token rendering.',
+    description: 'Streaming chat with real-time token rendering. Ollama in dev, OpenAI in prod.',
     href: '/demos/chat',
     icon: Bot,
     accentColor: 'green',
