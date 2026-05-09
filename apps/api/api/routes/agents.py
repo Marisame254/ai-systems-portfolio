@@ -1,43 +1,37 @@
 from fastapi import APIRouter
 
+from agents.chat_agent import get_chat_agent
+
 router = APIRouter()
 
-GRAPH_DEFINITION = {
-    "nodes": [
-        {"id": "start", "type": "start", "label": "__start__"},
-        {"id": "router", "type": "conditional", "label": "router"},
-        {"id": "retriever", "type": "tool", "label": "retriever"},
-        {"id": "llm_call", "type": "llm", "label": "llm_call"},
-        {"id": "synthesizer", "type": "llm", "label": "synthesizer"},
-        {"id": "end", "type": "end", "label": "__end__"},
-    ],
-    "edges": [
-        {"source": "start", "target": "router"},
-        {"source": "router", "target": "retriever", "condition": "needs_retrieval"},
-        {"source": "router", "target": "llm_call", "condition": "direct_llm"},
-        {"source": "retriever", "target": "synthesizer"},
-        {"source": "llm_call", "target": "synthesizer"},
-        {"source": "synthesizer", "target": "end"},
-    ],
+
+_SPECIAL_NODES = {
+    "__start__": "start",
+    "__end__": "end",
+    "tools": "tool",
 }
+
+
+def _classify(node_id: str) -> str:
+    return _SPECIAL_NODES.get(node_id, "llm")
 
 
 @router.get("/graph")
 async def get_graph():
-    return GRAPH_DEFINITION
+    graph = get_chat_agent().get_graph()
 
+    nodes = [
+        {"id": node_id, "label": node_id, "type": _classify(node_id)}
+        for node_id in graph.nodes
+    ]
 
-@router.post("/run")
-async def run_agent(request: dict):
-    return {
-        "status": "completed",
-        "trace": [
-            {"node": "router", "output": {"route": "needs_retrieval"}, "duration_ms": 12},
-            {"node": "retriever", "output": {"chunks": 3}, "duration_ms": 45},
-            {
-                "node": "synthesizer",
-                "output": {"response": "Demo agent response"},
-                "duration_ms": 230,
-            },
-        ],
-    }
+    edges = []
+    for edge in graph.edges:
+        item = {"source": edge.source, "target": edge.target}
+        if getattr(edge, "conditional", False):
+            item["conditional"] = True
+        if getattr(edge, "data", None):
+            item["condition"] = str(edge.data)
+        edges.append(item)
+
+    return {"nodes": nodes, "edges": edges}

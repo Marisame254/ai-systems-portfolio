@@ -12,10 +12,15 @@ export async function getChatInfo(): Promise<ChatInfo> {
   return res.json()
 }
 
+export type ChatStreamEvent =
+  | { type: 'token'; text: string }
+  | { type: 'tool_call'; name: string; args: unknown }
+  | { type: 'tool_result'; name: string; result: string }
+
 export async function* streamChat(
   message: string,
   history: Array<{ role: string; content: string }> = []
-): AsyncGenerator<string> {
+): AsyncGenerator<ChatStreamEvent> {
   const res = await fetch(`${API_BASE}/api/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -27,22 +32,24 @@ export async function* streamChat(
 
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
+  let buffer = ''
 
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
-    const chunk = decoder.decode(value, { stream: true })
-    const lines = chunk.split('\n')
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = line.slice(6)
-        if (data === '[DONE]') return
-        try {
-          const parsed = JSON.parse(data)
-          if (parsed.text) yield parsed.text
-        } catch {
-          // partial chunk, skip
-        }
+    buffer += decoder.decode(value, { stream: true })
+
+    let idx
+    while ((idx = buffer.indexOf('\n\n')) !== -1) {
+      const frame = buffer.slice(0, idx)
+      buffer = buffer.slice(idx + 2)
+      if (!frame.startsWith('data: ')) continue
+      const data = frame.slice(6)
+      if (data === '[DONE]') return
+      try {
+        yield JSON.parse(data) as ChatStreamEvent
+      } catch {
+        // ignore malformed frames
       }
     }
   }

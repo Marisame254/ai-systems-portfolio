@@ -2,11 +2,46 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { streamChat, getChatInfo, type ChatInfo } from '@/lib/api'
-import { Send, Bot, User, Trash2 } from 'lucide-react'
+import { Send, Bot, User, Trash2, Search, ChevronDown, ChevronRight } from 'lucide-react'
+
+interface ToolCall {
+  name: string
+  args: unknown
+  result?: string
+}
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
+  toolCalls?: ToolCall[]
+}
+
+function ToolCallChip({ call }: { call: ToolCall }) {
+  const [open, setOpen] = useState(false)
+  const query =
+    typeof call.args === 'object' && call.args !== null && 'query' in call.args
+      ? String((call.args as Record<string, unknown>).query)
+      : JSON.stringify(call.args)
+
+  return (
+    <div className="mb-2 rounded-md border border-accent-cyan/30 bg-accent-cyan/5 font-mono text-xs">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-accent-cyan transition-colors hover:bg-accent-cyan/10"
+      >
+        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        <Search className="h-3 w-3" />
+        <span className="font-semibold">{call.name}</span>
+        <span className="truncate text-text-secondary">"{query}"</span>
+        {!call.result && <span className="ml-auto animate-pulse text-text-muted">...</span>}
+      </button>
+      {open && call.result && (
+        <pre className="max-h-48 overflow-auto border-t border-accent-cyan/20 px-3 py-2 text-[11px] leading-relaxed text-text-secondary">
+          {call.result}
+        </pre>
+      )}
+    </div>
+  )
 }
 
 export default function ChatPage() {
@@ -37,13 +72,30 @@ export default function ChatPage() {
     setIsStreaming(true)
 
     try {
-      for await (const chunk of streamChat(input, history)) {
+      for await (const event of streamChat(input, history)) {
         setMessages((prev) => {
           const updated = [...prev]
-          updated[updated.length - 1] = {
-            role: 'assistant',
-            content: updated[updated.length - 1].content + chunk,
+          const last = { ...updated[updated.length - 1] }
+
+          if (event.type === 'token') {
+            last.content = (last.content || '') + event.text
+          } else if (event.type === 'tool_call') {
+            last.toolCalls = [
+              ...(last.toolCalls || []),
+              { name: event.name, args: event.args },
+            ]
+          } else if (event.type === 'tool_result') {
+            const calls = [...(last.toolCalls || [])]
+            for (let i = calls.length - 1; i >= 0; i--) {
+              if (calls[i].name === event.name && !calls[i].result) {
+                calls[i] = { ...calls[i], result: event.result }
+                break
+              }
+            }
+            last.toolCalls = calls
           }
+
+          updated[updated.length - 1] = last
           return updated
         })
       }
@@ -72,8 +124,8 @@ export default function ChatPage() {
           <h1 className="text-2xl font-bold text-text-primary">AI Chat</h1>
           <p className="text-sm text-text-secondary">
             {info
-              ? `Powered by ${info.provider === 'openai' ? 'OpenAI' : 'Ollama'} ${info.model} · streaming SSE`
-              : 'streaming SSE'}
+              ? `LangGraph agent · ${info.provider === 'openai' ? 'OpenAI' : 'Ollama'} ${info.model} · Tavily web search`
+              : 'LangGraph agent · streaming SSE'}
           </p>
         </div>
         {messages.length > 0 && (
@@ -95,7 +147,7 @@ export default function ChatPage() {
               <Bot className="mx-auto mb-3 h-10 w-10 text-accent-green/30" />
               <p className="font-mono text-sm text-text-muted">Start a conversation...</p>
               <p className="mt-1 font-mono text-xs text-text-muted/60">
-                Ask me about AI systems, LangGraph, or RAG
+                Try: "What's new in LangGraph this week?" to see the agent call Tavily
               </p>
             </div>
           </div>
@@ -125,9 +177,12 @@ export default function ChatPage() {
                   : 'bg-surface-2 text-text-primary'
               }`}
             >
-              {msg.content || (
+              {msg.toolCalls?.map((call, j) => (
+                <ToolCallChip key={j} call={call} />
+              ))}
+              {msg.content || (!msg.toolCalls?.length && (
                 <span className="text-text-muted">...</span>
-              )}
+              ))}
               {isStreaming && i === messages.length - 1 && msg.role === 'assistant' && (
                 <span className="ml-0.5 animate-cursor-blink text-accent-green">█</span>
               )}

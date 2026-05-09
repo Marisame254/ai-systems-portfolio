@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
 
+    # Agent tools
+    tavily_api_key: str = ""
+    agent_max_iterations: int = 5
+
     database_url: str = "postgresql+asyncpg://portfolio:portfolio@localhost:5432/portfolio"
     redis_url: str = "redis://localhost:6379"
 
