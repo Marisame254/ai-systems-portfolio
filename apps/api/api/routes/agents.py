@@ -34,6 +34,10 @@ async def run_agent(request: dict):
         "trace": [
             {"node": "router", "output": {"route": "needs_retrieval"}, "duration_ms": 12},
             {"node": "retriever", "output": {"chunks": 3}, "duration_ms": 45},
-            {"node": "synthesizer", "output": {"response": "Demo agent response"}, "duration_ms": 230},
+            {
+                "node": "synthesizer",
+                "output": {"response": "Demo agent response"},
+                "duration_ms": 230,
+            },
         ],
     }

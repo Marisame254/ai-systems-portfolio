@@ -1,9 +1,11 @@
 import json
+
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from anthropic import AsyncAnthropic
-from core.config import settings
-from core.dependencies import get_anthropic_client
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+from core.dependencies import get_chat_model
 from schemas.models import ChatRequest
 
 router = APIRouter()
@@ -15,19 +17,17 @@ SYSTEM_PROMPT = (
     "Be concise and helpful. Occasionally reference AI engineering concepts naturally."
 )
 
+ROLE_TO_MSG = {"user": HumanMessage, "assistant": AIMessage}
 
-async def generate_stream(client: AsyncAnthropic, request: ChatRequest):
-    messages = [{"role": m.role, "content": m.content} for m in request.history]
-    messages.append({"role": "user", "content": request.message})
 
-    async with client.messages.stream(
-        model=settings.claude_model,
-        max_tokens=2048,
-        system=SYSTEM_PROMPT,
-        messages=messages,
-    ) as stream:
-        async for text in stream.text_stream:
-            payload = json.dumps({"text": text})
+async def generate_stream(model: BaseChatModel, request: ChatRequest):
+    messages = [SystemMessage(content=SYSTEM_PROMPT)]
+    messages.extend(ROLE_TO_MSG[m.role](content=m.content) for m in request.history)
+    messages.append(HumanMessage(content=request.message))
+
+    async for chunk in model.astream(messages):
+        if chunk.content:
+            payload = json.dumps({"text": chunk.content})
             yield f"data: {payload}\n\n"
 
     yield "data: [DONE]\n\n"
@@ -36,10 +36,10 @@ async def generate_stream(client: AsyncAnthropic, request: ChatRequest):
 @router.post("/stream")
 async def stream_chat(
     request: ChatRequest,
-    client: AsyncAnthropic = Depends(get_anthropic_client),
+    model: BaseChatModel = Depends(get_chat_model),
 ):
     return StreamingResponse(
-        generate_stream(client, request),
+        generate_stream(model, request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

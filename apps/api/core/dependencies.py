@@ -1,11 +1,24 @@
-from anthropic import AsyncAnthropic
+from functools import lru_cache
+
+from langchain_core.language_models import BaseChatModel
+
 from core.config import settings
 
-_anthropic_client: AsyncAnthropic | None = None
 
+@lru_cache(maxsize=1)
+def get_chat_model() -> BaseChatModel:
+    if settings.environment == "prod":
+        from langchain_openai import ChatOpenAI
 
-def get_anthropic_client() -> AsyncAnthropic:
-    global _anthropic_client
-    if _anthropic_client is None:
-        _anthropic_client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-    return _anthropic_client
+        return ChatOpenAI(
+            model=settings.openai_model,
+            api_key=settings.openai_api_key,
+            streaming=True,
+        )
+
+    from langchain_ollama import ChatOllama
+
+    return ChatOllama(
+        model=settings.ollama_model,
+        base_url=settings.ollama_base_url,
+    )

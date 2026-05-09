@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,8 +14,15 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    anthropic_api_key: str = ""
-    claude_model: str = "claude-sonnet-4-6"
+    environment: Literal["dev", "prod"] = "dev"
+
+    # Ollama (dev)
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen3-coder:480b-cloud"
+
+    # OpenAI (prod)
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
 
     database_url: str = "postgresql+asyncpg://portfolio:portfolio@localhost:5432/portfolio"
     redis_url: str = "redis://localhost:6379"

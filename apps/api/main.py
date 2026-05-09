@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from api.routes import agents, chat, memory, rag
 from core.config import settings
-from api.routes import chat, rag, agents, memory
 
 
 @asynccontextmanager
