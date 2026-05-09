@@ -74,10 +74,24 @@ export async function uploadDocument(file: File) {
   return res.json()
 }
 
+export interface AgentGraphToolInfo {
+  name: string
+  description: string
+}
+
+export interface AgentGraphNodeMeta {
+  model?: string
+  provider?: string
+  system_prompt?: string
+  tools?: AgentGraphToolInfo[]
+  description?: string
+}
+
 export interface AgentGraphNode {
   id: string
   label: string
   type: 'start' | 'end' | 'tool' | 'llm' | string
+  meta?: AgentGraphNodeMeta
 }
 
 export interface AgentGraphEdge {

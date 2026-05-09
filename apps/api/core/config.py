@@ -7,7 +7,6 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 # Repo root: apps/api/core/config.py → parents[3]
 ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
 
-print(f"Loading environment variables from: {ENV_PATH}")
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=ENV_PATH,
