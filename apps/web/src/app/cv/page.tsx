@@ -18,22 +18,21 @@ const skills: Record<string, string[]> = {
     'Streaming token responses (SSE / WebSocket)',
   ],
   'RAG & Vector Search': [
-    'pgvector',
-    'Ollama embeddings (nomic-embed-text)',
+    'PGvector, Chromadb',
+    'Hugging Face & Ollama embeddings',
     'Hybrid retrieval',
     'Document chunking & ingestion',
   ],
   'MCP (Model Context Protocol)': [
     'MCP servers (fastapi-mcp, FastMCP)',
     'MCP clients (MultiServerMCPClient)',
-    'API-key auth with scopes',
+    'MCP Oauth & API key authentication',
   ],
   'Backend & Data': [
     'FastAPI',
     'SQLAlchemy async + asyncpg',
     'Alembic',
-    'PostgreSQL',
-    'MongoDB',
+    'PostgreSQL, Supabase',
     'Redis',
     'JWT + refresh tokens',
     'Polymorphic RBAC',
@@ -55,15 +54,14 @@ const skills: Record<string, string[]> = {
     'TailwindCSS',
     'TypeScript',
   ],
-  'Cloud & DevOps': ['AWS', 'Azure', 'Docker', 'Kubernetes', 'CI/CD (Python + Bash)'],
+  'Cloud & DevOps': ['AWS', 'Docker', 'Kubernetes', 'CI/CD (Python + Bash)'],
   'Languages & Tools': [
     'Python',
     'TypeScript',
     'Go (GraphQL)',
     'SQL',
     'uv',
-    'pnpm Workspaces',
-    'Turborepo',
+    'pnpm',
     'Git',
   ],
 }
@@ -146,7 +144,7 @@ const projects = [
     name: 'Lyra',
     description:
       'Python CLI agent with MCP tool integration, persistent memory (filesystem + PostgreSQL), configurable models (Ollama local + cloud), and thread management.',
-    tech: ['Python', 'LangGraph', 'MCP', 'Ollama', 'PostgreSQL'],
+    tech: ['Python', 'DeepAgents', 'MCP', 'Ollama', 'PostgreSQL'],
   },
   {
     name: 'mcp-servers',
@@ -205,12 +203,6 @@ export default function CVPage() {
             className="text-accent-cyan transition-colors hover:text-accent-green"
           >
             rulivas26@gmail.com
-          </a>
-          <a
-            href="tel:+529514086411"
-            className="text-accent-cyan transition-colors hover:text-accent-green"
-          >
-            +52 (951) 408 6411
           </a>
           <span className="text-text-muted">Oaxaca de Juárez, México</span>
           <a

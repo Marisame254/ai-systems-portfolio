@@ -33,7 +33,7 @@ export const demos: Demo[] = [
     href: '/demos/agents',
     icon: GitBranch,
     accentColor: 'green',
-    badge: 'Preview',
+    badge: 'Live',
   },
   {
     title: 'Memory Demo',
