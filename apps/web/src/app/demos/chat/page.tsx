@@ -20,7 +20,7 @@ import {
 } from '@/lib/thread-store'
 import { getUserId } from '@/lib/user'
 import { MessageBubble, type ChatMessageView, type ToolCall } from '@/components/chat/message-bubble'
-import { Send, Bot, Plus, Trash2, MessageSquare, Activity, AlertTriangle } from 'lucide-react'
+import { Send, Bot, Plus, Trash2, MessageSquare, Activity, AlertTriangle, Menu, X } from 'lucide-react'
 
 function newThreadId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
@@ -77,6 +77,7 @@ export default function ChatPage() {
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [loadingThread, setLoadingThread] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -104,6 +105,7 @@ export default function ChatPage() {
 
   const selectThread = useCallback(async (threadId: string) => {
     setActiveThreadId(threadId)
+    setSidebarOpen(false)
     setLoadingThread(true)
     setMessages([])
     try {
@@ -119,6 +121,7 @@ export default function ChatPage() {
   const startNewChat = useCallback(() => {
     setActiveThreadId(newThreadId())
     setMessages([])
+    setSidebarOpen(false)
   }, [])
 
   const handleDeleteThread = useCallback(
@@ -202,9 +205,34 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-5rem)] max-w-7xl gap-3 px-4 py-6">
-      {/* Sidebar */}
-      <aside className="flex w-64 shrink-0 flex-col rounded-lg border border-border bg-surface">
+    <div className="relative mx-auto flex h-[calc(100vh-5rem)] max-w-7xl gap-3 px-3 py-4 sm:px-4 sm:py-6">
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          aria-hidden
+        />
+      )}
+
+      {/* Sidebar (drawer on mobile, static on md+) */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85%] flex-col border-r border-border bg-surface transition-transform md:static md:inset-auto md:w-64 md:max-w-none md:shrink-0 md:translate-x-0 md:rounded-lg md:border ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex items-center justify-between border-b border-border p-3 md:hidden">
+          <span className="font-mono text-xs uppercase tracking-widest text-text-muted">
+            threads
+          </span>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-text-secondary hover:text-accent-green"
+            aria-label="Close sidebar"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
         <div className="border-b border-border p-3">
           <button
             onClick={startNewChat}
@@ -260,23 +288,32 @@ export default function ChatPage() {
       </aside>
 
       {/* Main chat */}
-      <div className="flex flex-1 flex-col">
-        <div className="mb-3 flex items-start justify-between">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-accent-green">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="mb-3 flex items-start gap-3">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-text-secondary transition-colors hover:border-accent-green/50 hover:text-accent-green md:hidden"
+            aria-label="Open threads"
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-[10px] uppercase tracking-widest text-accent-green sm:text-xs">
               // ai_chat_playground
             </p>
-            <h1 className="text-xl font-bold text-text-primary">AI Chat</h1>
-            <p className="text-xs text-text-secondary">
+            <h1 className="text-lg font-bold text-text-primary sm:text-xl">AI Chat</h1>
+            <p className="text-[11px] text-text-secondary sm:text-xs">
               {info
-                ? `LangGraph agent · ${info.provider === 'openai' ? 'OpenAI' : 'Ollama'} ${info.model} · stateful (Postgres checkpointer)`
+                ? `LangGraph · ${info.provider === 'openai' ? 'OpenAI' : 'Ollama'} ${info.model} · stateful`
                 : 'LangGraph agent · stateful'}
             </p>
-            <p className="mt-1 font-mono text-[10px] text-text-muted">thread: {activeThreadId}</p>
+            <p className="mt-1 truncate font-mono text-[10px] text-text-muted">
+              thread: {activeThreadId}
+            </p>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto rounded-lg border border-border bg-surface p-4">
+        <div className="flex-1 overflow-y-auto rounded-lg border border-border bg-surface p-3 sm:p-4">
           {loadingThread ? (
             <p className="text-center font-mono text-xs text-text-muted">loading thread…</p>
           ) : messages.length === 0 ? (
@@ -307,19 +344,20 @@ export default function ChatPage() {
             max {MAX_THREADS} threads — sending will evict oldest
           </div>
         )}
-        <form onSubmit={handleSubmit} className="mt-3 flex gap-3">
+        <form onSubmit={handleSubmit} className="mt-3 flex gap-2 sm:gap-3">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask anything about AI systems..."
             disabled={isStreaming}
-            className="flex-1 rounded-lg border border-border bg-surface px-4 py-3 text-sm text-text-primary placeholder-text-muted outline-none transition-all focus:border-accent-green/50 focus:ring-1 focus:ring-accent-green/20 disabled:opacity-50"
+            className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-3 text-base text-text-primary placeholder-text-muted outline-none transition-all focus:border-accent-green/50 focus:ring-1 focus:ring-accent-green/20 disabled:opacity-50 sm:px-4 sm:text-sm"
           />
           <button
             type="submit"
             disabled={!input.trim() || isStreaming}
-            className="flex items-center gap-2 rounded-lg bg-accent-green px-4 py-3 text-sm font-medium text-black transition-all hover:bg-accent-green/90 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Send"
+            className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-accent-green px-4 py-3 text-sm font-medium text-black transition-all hover:bg-accent-green/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
           </button>

@@ -87,13 +87,15 @@ function StatePageInner() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <div className="mb-6">
-        <p className="font-mono text-xs uppercase tracking-widest text-accent-green">
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mb-5 sm:mb-6">
+        <p className="font-mono text-[10px] uppercase tracking-widest text-accent-green sm:text-xs">
           // state_inspector
         </p>
-        <h1 className="text-2xl font-bold text-text-primary">LangGraph State Inspector</h1>
-        <p className="text-sm text-text-secondary">
+        <h1 className="text-xl font-bold text-text-primary sm:text-2xl">
+          LangGraph State Inspector
+        </h1>
+        <p className="text-xs text-text-secondary sm:text-sm">
           Live view of any thread&apos;s persisted state and checkpoint history (Postgres-backed).
         </p>
       </div>
@@ -103,7 +105,7 @@ function StatePageInner() {
         <select
           value={activeThread}
           onChange={(e) => selectThread(e.target.value)}
-          className="rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-xs text-text-primary outline-none focus:border-accent-cyan/50"
+          className="min-w-0 max-w-full flex-1 rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-xs text-text-primary outline-none focus:border-accent-cyan/50 sm:flex-none"
         >
           {threads.length === 0 && <option value="">no threads</option>}
           {threads.map((t) => (
@@ -113,10 +115,10 @@ function StatePageInner() {
           ))}
         </select>
 
-        <div className="ml-auto flex gap-1 rounded-md border border-border p-0.5">
+        <div className="flex w-full gap-1 rounded-md border border-border p-0.5 sm:ml-auto sm:w-auto">
           <button
             onClick={() => setTab('state')}
-            className={`flex items-center gap-1.5 rounded px-3 py-1 font-mono text-xs transition-colors ${
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded px-3 py-1.5 font-mono text-xs transition-colors sm:flex-none ${
               tab === 'state' ? 'bg-accent-cyan/10 text-accent-cyan' : 'text-text-muted hover:text-text-primary'
             }`}
           >
@@ -125,7 +127,7 @@ function StatePageInner() {
           </button>
           <button
             onClick={() => setTab('history')}
-            className={`flex items-center gap-1.5 rounded px-3 py-1 font-mono text-xs transition-colors ${
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded px-3 py-1.5 font-mono text-xs transition-colors sm:flex-none ${
               tab === 'history' ? 'bg-accent-cyan/10 text-accent-cyan' : 'text-text-muted hover:text-text-primary'
             }`}
           >

@@ -189,15 +189,19 @@ const certifications = [
 
 export default function CVPage() {
   return (
-    <div className="mx-auto max-w-4xl px-6 py-16">
+    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-16">
       {/* Header */}
-      <div className="mb-12 border-b border-border pb-12">
+      <div className="mb-10 border-b border-border pb-8 sm:mb-12 sm:pb-12">
         <p className="mb-2 font-mono text-xs uppercase tracking-widest text-accent-green">
           // curriculum_vitae
         </p>
-        <h1 className="mb-2 text-5xl font-bold text-gradient-green">Raul Vasquez</h1>
-        <p className="mb-6 text-xl text-text-secondary">Machine Learning Engineer · AI Systems</p>
-        <div className="flex flex-wrap gap-x-5 gap-y-2 font-mono text-sm">
+        <h1 className="mb-2 text-3xl font-bold text-gradient-green sm:text-4xl md:text-5xl">
+          Raul Vasquez
+        </h1>
+        <p className="mb-6 text-base text-text-secondary sm:text-xl">
+          Machine Learning Engineer · AI Systems
+        </p>
+        <div className="flex flex-wrap gap-x-5 gap-y-2 font-mono text-xs sm:text-sm">
           <a
             href="mailto:rulivas26@gmail.com"
             className="text-accent-cyan transition-colors hover:text-accent-green"
@@ -217,23 +221,23 @@ export default function CVPage() {
       </div>
 
       {/* Summary */}
-      <section className="mb-16">
+      <section className="mb-12 sm:mb-16">
         <p className="mb-6 font-mono text-xs uppercase tracking-widest text-accent-green">
           // summary
         </p>
-        <div className="rounded-lg border border-border bg-surface p-6">
+        <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
           <p className="text-sm leading-relaxed text-text-secondary">{summary}</p>
         </div>
       </section>
 
       {/* Skills */}
-      <section className="mb-16">
+      <section className="mb-12 sm:mb-16">
         <p className="mb-8 font-mono text-xs uppercase tracking-widest text-accent-green">
           // skills
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           {Object.entries(skills).map(([category, items]) => (
-            <div key={category} className="rounded-lg border border-border bg-surface p-5">
+            <div key={category} className="rounded-lg border border-border bg-surface p-4 sm:p-5">
               <h3 className="mb-3 font-mono text-sm text-text-secondary">{category}</h3>
               <div className="flex flex-wrap gap-2">
                 {items.map((skill) => (
@@ -251,13 +255,13 @@ export default function CVPage() {
       </section>
 
       {/* Experience */}
-      <section className="mb-16">
+      <section className="mb-12 sm:mb-16">
         <p className="mb-8 font-mono text-xs uppercase tracking-widest text-accent-green">
           // experience
         </p>
         <div className="space-y-6">
           {experience.map((exp, i) => (
-            <div key={i} className="rounded-lg border border-border bg-surface p-6">
+            <div key={i} className="rounded-lg border border-border bg-surface p-4 sm:p-6">
               <div className="mb-1 flex flex-wrap items-start justify-between gap-2">
                 <h3 className="text-lg font-semibold text-text-primary">{exp.title}</h3>
                 <span className="font-mono text-xs text-text-muted">{exp.period}</span>
@@ -302,13 +306,13 @@ export default function CVPage() {
       </section>
 
       {/* Projects */}
-      <section className="mb-16">
+      <section className="mb-12 sm:mb-16">
         <p className="mb-8 font-mono text-xs uppercase tracking-widest text-accent-green">
           // projects
         </p>
         <div className="space-y-4">
           {projects.map((proj, i) => (
-            <div key={i} className="rounded-lg border border-border bg-surface p-6">
+            <div key={i} className="rounded-lg border border-border bg-surface p-4 sm:p-6">
               <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                 {proj.href ? (
                   <a
@@ -340,13 +344,13 @@ export default function CVPage() {
       </section>
 
       {/* Education */}
-      <section className="mb-16">
+      <section className="mb-12 sm:mb-16">
         <p className="mb-8 font-mono text-xs uppercase tracking-widest text-accent-green">
           // education
         </p>
         <div className="space-y-4">
           {education.map((edu, i) => (
-            <div key={i} className="rounded-lg border border-border bg-surface p-6">
+            <div key={i} className="rounded-lg border border-border bg-surface p-4 sm:p-6">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <h3 className="font-semibold text-text-primary">{edu.degree}</h3>
@@ -360,12 +364,12 @@ export default function CVPage() {
       </section>
 
       {/* Languages + Certifications */}
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="grid gap-6 sm:grid-cols-2">
         <div>
           <p className="mb-6 font-mono text-xs uppercase tracking-widest text-accent-green">
             // languages
           </p>
-          <div className="rounded-lg border border-border bg-surface p-6">
+          <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
             <ul className="space-y-2">
               {languages.map((lang) => (
                 <li key={lang.name} className="flex justify-between text-sm">
@@ -380,7 +384,7 @@ export default function CVPage() {
           <p className="mb-6 font-mono text-xs uppercase tracking-widest text-accent-green">
             // certifications
           </p>
-          <div className="rounded-lg border border-border bg-surface p-6">
+          <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
             <ul className="space-y-2">
               {certifications.map((cert) => (
                 <li key={cert} className="flex gap-2 text-sm text-text-secondary">

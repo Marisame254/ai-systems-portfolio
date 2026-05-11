@@ -86,13 +86,13 @@ export default function MemoryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-8">
-      <div className="mb-8">
-        <p className="font-mono text-xs uppercase tracking-widest text-accent-cyan">
+    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mb-6 sm:mb-8">
+        <p className="font-mono text-[10px] uppercase tracking-widest text-accent-cyan sm:text-xs">
           // memory_demo
         </p>
-        <h1 className="text-2xl font-bold text-text-primary">Long-term Memory</h1>
-        <p className="text-sm text-text-secondary">
+        <h1 className="text-xl font-bold text-text-primary sm:text-2xl">Long-term Memory</h1>
+        <p className="text-xs text-text-secondary sm:text-sm">
           Cross-thread facts the agent remembers about you. Stored in Postgres via LangGraph&apos;s{' '}
           <code className="font-mono text-xs text-accent-cyan">AsyncPostgresStore</code> under{' '}
           <code className="font-mono text-xs text-accent-cyan">
@@ -103,15 +103,15 @@ export default function MemoryPage() {
       </div>
 
       {/* Session info */}
-      <div className="mb-6 flex items-center justify-between rounded-lg border border-border bg-surface p-4">
+      <div className="mb-6 flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <Brain className="h-5 w-5 text-accent-cyan" />
-          <div>
+          <Brain className="h-5 w-5 shrink-0 text-accent-cyan" />
+          <div className="min-w-0">
             <p className="font-mono text-xs text-text-muted">user_id</p>
-            <p className="font-mono text-sm text-accent-cyan">{userId || '…'}</p>
+            <p className="truncate font-mono text-sm text-accent-cyan">{userId || '…'}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-xs text-text-muted">
             {memories.length} {memories.length === 1 ? 'entry' : 'entries'}
           </span>
@@ -193,7 +193,7 @@ export default function MemoryPage() {
       </div>
 
       {/* Add memory */}
-      <div className="rounded-lg border border-border bg-surface p-6">
+      <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
         <h2 className="mb-4 font-mono text-xs uppercase tracking-widest text-accent-cyan">
           Add Memory Entry
         </h2>
@@ -203,7 +203,7 @@ export default function MemoryPage() {
             onChange={(e) => setNewText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
             placeholder="e.g. Prefers concise answers with code examples"
-            className="rounded-lg border border-border bg-surface-2 px-4 py-2.5 text-sm text-text-primary placeholder-text-muted outline-none transition-all focus:border-accent-cyan/50"
+            className="rounded-lg border border-border bg-surface-2 px-3 py-3 text-base text-text-primary placeholder-text-muted outline-none transition-all focus:border-accent-cyan/50 sm:px-4 sm:py-2.5 sm:text-sm"
           />
           <button
             onClick={handleAdd}

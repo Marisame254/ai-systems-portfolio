@@ -31,6 +31,10 @@
   * {
     @apply border-border;
   }
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-text-primary;
     font-feature-settings: "rlig" 1, "calt" 1;

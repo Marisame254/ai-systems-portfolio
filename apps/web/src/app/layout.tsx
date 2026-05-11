@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import './globals.css'
@@ -10,6 +10,12 @@ export const metadata: Metadata = {
   description:
     'AI Systems Engineer specializing in LangGraph, RAG systems, multi-agent architectures, and LLM applications.',
   keywords: ['AI Engineer', 'LangGraph', 'RAG', 'Multi-agent', 'FastAPI', 'Next.js'],
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#0a0a0a',
 }
 
 export default function RootLayout({

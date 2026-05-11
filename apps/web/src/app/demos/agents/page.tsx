@@ -117,7 +117,7 @@ function NodeDetailPanel({
   const meta = node.meta ?? {}
 
   return (
-    <div className="flex h-full w-80 shrink-0 flex-col border-l border-border bg-surface">
+    <div className="flex h-full w-full shrink-0 flex-col border-t border-border bg-surface md:w-80 md:border-l md:border-t-0">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <NodeIcon type={node.type} />
@@ -266,13 +266,15 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <div className="mb-6">
-        <p className="font-mono text-xs uppercase tracking-widest text-accent-green">
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mb-5 sm:mb-6">
+        <p className="font-mono text-[10px] uppercase tracking-widest text-accent-green sm:text-xs">
           // agent_visualization
         </p>
-        <h1 className="text-2xl font-bold text-text-primary">LangGraph Agent Graph</h1>
-        <p className="text-sm text-text-secondary">
+        <h1 className="text-xl font-bold text-text-primary sm:text-2xl">
+          LangGraph Agent Graph
+        </h1>
+        <p className="text-xs text-text-secondary sm:text-sm">
           Tool-calling agent · <span className="font-mono">agent ↔ tools</span> loop with conditional
           edge · click any node for details
         </p>
@@ -294,8 +296,8 @@ export default function AgentsPage() {
         </span>
       </div>
 
-      <div className="flex h-[600px] overflow-hidden rounded-lg border border-border">
-        <div className="flex-1">
+      <div className="flex flex-col overflow-hidden rounded-lg border border-border md:h-[600px] md:flex-row">
+        <div className="h-[380px] w-full shrink-0 md:h-auto md:w-auto md:flex-1 md:shrink">
           {error ? (
             <div className="flex h-full items-center justify-center bg-[#0a0a0a]">
               <div className="flex max-w-md items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/5 p-4 font-mono text-xs">
@@ -324,6 +326,9 @@ export default function AgentsPage() {
               onEdgesChange={onEdgesChange}
               onNodeClick={onNodeClick}
               fitView
+              fitViewOptions={{ padding: 0.25 }}
+              minZoom={0.3}
+              proOptions={{ hideAttribution: false }}
               style={{ background: '#0a0a0a' }}
             >
               <Background color="#1a1a1a" gap={24} />
@@ -343,7 +348,7 @@ export default function AgentsPage() {
         )}
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-4 rounded-lg border border-border bg-surface p-4">
+      <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-lg border border-border bg-surface p-4 sm:flex-row sm:items-center sm:gap-4">
         <p className="font-mono text-xs leading-relaxed text-text-muted">
           <span className="text-accent-green">{'>'}</span> Click any node to inspect it: see the
           model and system prompt for <span className="text-accent-cyan">agent</span>, the bound

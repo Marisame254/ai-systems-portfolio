@@ -33,7 +33,7 @@ export function DemoCard({ title, description, href, icon: Icon, accentColor, ba
     <Link
       href={href}
       className={cn(
-        'group relative flex flex-col gap-4 rounded-lg border border-border bg-surface p-6 transition-all duration-300',
+        'group relative flex flex-col gap-4 rounded-lg border border-border bg-surface p-5 transition-all duration-300 sm:p-6',
         colors.hover
       )}
     >
@@ -58,7 +58,7 @@ export function DemoCard({ title, description, href, icon: Icon, accentColor, ba
       </div>
       <div
         className={cn(
-          'flex items-center gap-1 font-mono text-xs opacity-0 transition-opacity group-hover:opacity-100',
+          'flex items-center gap-1 font-mono text-xs opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100',
           colors.text
         )}
       >

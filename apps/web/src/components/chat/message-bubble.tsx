@@ -124,9 +124,9 @@ export function MessageBubble({
   isStreaming?: boolean
 }) {
   return (
-    <div className={`mb-4 flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+    <div className={`mb-4 flex gap-2 sm:gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
       <div
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md sm:h-8 sm:w-8 ${
           msg.role === 'user'
             ? 'bg-accent-cyan/10 text-accent-cyan'
             : 'bg-accent-green/10 text-accent-green'
@@ -135,7 +135,7 @@ export function MessageBubble({
         {msg.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
       <div
-        className={`max-w-[80%] rounded-lg px-4 py-3 text-sm leading-relaxed ${
+        className={`min-w-0 max-w-[88%] rounded-lg px-3 py-2.5 text-sm leading-relaxed sm:max-w-[80%] sm:px-4 sm:py-3 ${
           msg.role === 'user'
             ? 'bg-accent-cyan/10 text-text-primary'
             : 'bg-surface-2 text-text-primary'

@@ -22,13 +22,15 @@ export function TerminalHero() {
   return (
     <div className="w-full max-w-3xl">
       <div className="rounded-lg border border-border bg-surface">
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <div className="h-3 w-3 rounded-full bg-red-500/70" />
-          <div className="h-3 w-3 rounded-full bg-yellow-500/70" />
-          <div className="h-3 w-3 rounded-full bg-green-500/70" />
-          <span className="ml-2 font-mono text-xs text-text-muted">marisame@ai-systems ~ %</span>
+        <div className="flex items-center gap-2 border-b border-border px-3 py-3 sm:px-4">
+          <div className="h-2.5 w-2.5 rounded-full bg-red-500/70 sm:h-3 sm:w-3" />
+          <div className="h-2.5 w-2.5 rounded-full bg-yellow-500/70 sm:h-3 sm:w-3" />
+          <div className="h-2.5 w-2.5 rounded-full bg-green-500/70 sm:h-3 sm:w-3" />
+          <span className="ml-2 truncate font-mono text-[10px] text-text-muted sm:text-xs">
+            marisame@ai-systems ~ %
+          </span>
         </div>
-        <div className="p-6 font-mono text-sm">
+        <div className="p-4 font-mono text-xs sm:p-6 sm:text-sm">
           <div className="mb-4">
             <span className="text-accent-green">marisame</span>
             <span className="text-text-muted">@</span>
@@ -37,7 +39,7 @@ export function TerminalHero() {
             <span className="text-text-primary">whoami</span>
           </div>
 
-          <div className="mb-1 text-2xl font-bold text-text-primary md:text-4xl">
+          <div className="mb-1 text-2xl font-bold text-text-primary sm:text-3xl md:text-4xl">
             <span className="text-gradient-green">Marisame</span>
           </div>
 
