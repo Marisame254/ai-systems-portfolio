@@ -34,8 +34,11 @@ async def generate_stream(
     pool,
     request: ChatRequest,
 ):
+    configurable: dict = {"thread_id": request.thread_id}
+    if request.user_id:
+        configurable["user_id"] = request.user_id
     config = {
-        "configurable": {"thread_id": request.thread_id},
+        "configurable": configurable,
         "recursion_limit": settings.agent_max_iterations * 2 + 2,
     }
 
@@ -58,6 +61,8 @@ async def generate_stream(
         kind = event["event"]
 
         if kind == "on_chat_model_stream":
+            if "memory_extraction" in (event.get("tags") or []):
+                continue
             chunk = event["data"].get("chunk")
             text = getattr(chunk, "content", "") if chunk else ""
             if text:

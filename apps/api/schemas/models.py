@@ -11,7 +11,24 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     thread_id: str
+    user_id: str | None = None
     history: list[ChatMessage] = []  # legacy, ignored when checkpointer is active
+
+
+class MemoryEntry(BaseModel):
+    key: str
+    text: str
+    source: Literal["auto", "manual"]
+    created_at: str
+
+
+class MemoryListResponse(BaseModel):
+    user_id: str
+    entries: list[MemoryEntry]
+
+
+class MemoryCreateRequest(BaseModel):
+    text: str
 
 
 class RAGQueryRequest(BaseModel):

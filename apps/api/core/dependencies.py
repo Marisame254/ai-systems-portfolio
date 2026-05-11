@@ -3,6 +3,7 @@ from functools import lru_cache
 from fastapi import Request
 from langchain_core.language_models import BaseChatModel
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.store.base import BaseStore
 
 from core.config import settings
 
@@ -29,3 +30,8 @@ def get_chat_model() -> BaseChatModel:
 def get_chat_agent(request: Request) -> CompiledStateGraph:
     """Resolved at request-time from FastAPI app.state (built in lifespan)."""
     return request.app.state.chat_agent
+
+
+def get_memory_store(request: Request) -> BaseStore:
+    """Resolved at request-time from FastAPI app.state (built in lifespan)."""
+    return request.app.state.memory_store

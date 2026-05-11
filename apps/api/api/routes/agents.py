@@ -18,6 +18,8 @@ _SPECIAL_NODES = {
     "__start__": "start",
     "__end__": "end",
     "tools": "tool",
+    "load_memory": "memory",
+    "save_memory": "memory",
 }
 
 
@@ -50,6 +52,21 @@ def _node_meta(node_id: str) -> dict[str, Any]:
             "provider": "openai" if is_prod else "ollama",
             "model": settings.openai_model if is_prod else settings.ollama_model,
             "system_prompt": SYSTEM_PROMPT,
+        }
+    if node_id == "load_memory":
+        return {
+            "description": (
+                "Reads long-term memories from the LangGraph Store "
+                "(namespace=('memories', user_id)) and injects them as a system message "
+                "so the agent can personalize replies."
+            )
+        }
+    if node_id == "save_memory":
+        return {
+            "description": (
+                "After the agent's final answer, calls the LLM to extract durable user facts "
+                "and persists them to the Store. Skipped if no user_id is configured."
+            )
         }
     return {}
 

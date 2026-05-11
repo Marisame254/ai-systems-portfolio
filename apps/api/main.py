@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langgraph.store.postgres.aio import AsyncPostgresStore
 from psycopg_pool import AsyncConnectionPool
 
 from agents.chat_agent import build_chat_graph
@@ -27,13 +28,19 @@ async def lifespan(app: FastAPI):
 
     saver = AsyncPostgresSaver(pool)
     await saver.setup()
+
+    store = AsyncPostgresStore(pool)
+    await store.setup()
+
     await ensure_schema(pool)
 
     app.state.checkpoint_pool = pool
+    app.state.memory_store = store
     app.state.chat_agent = build_chat_graph(
         get_chat_model(),
         build_tools(),
         checkpointer=saver,
+        store=store,
     )
 
     try:
