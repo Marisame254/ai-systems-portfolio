@@ -6,9 +6,9 @@ import { usePathname } from 'next/navigation'
 import { Menu, Terminal, X } from 'lucide-react'
 
 const navLinks = [
-  { href: '/', label: 'home' },
-  { href: '/cv', label: 'cv' },
-  { href: '/demos', label: 'demos' },
+  { href: '/', label: 'Home' },
+  { href: '/cv', label: 'CV' },
+  { href: '/demos', label: 'Demos' },
 ]
 
 export function Navbar() {
