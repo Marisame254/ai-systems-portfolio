@@ -1,54 +1,88 @@
 'use client'
 
-import { useState } from 'react'
-import { Brain, RefreshCw, Trash2, Plus } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { Brain, RefreshCw, Trash2, Plus, Loader2, Sparkles, Hand } from 'lucide-react'
+import {
+  listMemories,
+  addMemory as apiAddMemory,
+  deleteMemory as apiDeleteMemory,
+  clearMemories as apiClearMemories,
+  type MemoryEntry,
+} from '@/lib/api'
+import { getUserId } from '@/lib/user'
 
-interface MemoryEntry {
-  key: string
-  value: string
-  timestamp: string
+function formatTimestamp(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString('en-CA', { hour12: false }).replace(',', '')
+  } catch {
+    return iso
+  }
 }
 
-const MOCK_MEMORIES: MemoryEntry[] = [
-  {
-    key: 'user_preference',
-    value: 'Prefers concise answers with code examples',
-    timestamp: '2024-01-15 14:23',
-  },
-  {
-    key: 'last_topic',
-    value: 'LangGraph conditional edges and state management',
-    timestamp: '2024-01-15 14:30',
-  },
-  {
-    key: 'context_summary',
-    value: 'User is building a multi-agent RAG pipeline with FastAPI backend',
-    timestamp: '2024-01-15 14:45',
-  },
-]
-
 export default function MemoryPage() {
-  const [sessionId] = useState(() => Math.random().toString(36).slice(2, 10))
-  const [memories, setMemories] = useState<MemoryEntry[]>(MOCK_MEMORIES)
-  const [newKey, setNewKey] = useState('')
-  const [newValue, setNewValue] = useState('')
+  const [userId, setUserId] = useState<string>('')
+  const [memories, setMemories] = useState<MemoryEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [newText, setNewText] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  function addMemory() {
-    if (!newKey.trim() || !newValue.trim()) return
-    setMemories((prev) => [
-      ...prev,
-      {
-        key: newKey,
-        value: newValue,
-        timestamp: new Date().toLocaleString('en-CA', { hour12: false }).replace(',', ''),
-      },
-    ])
-    setNewKey('')
-    setNewValue('')
+  const refresh = useCallback(async (uid: string) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await listMemories(uid)
+      setMemories(res.entries)
+    } catch {
+      setError('Could not reach the API. Is the backend running?')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const uid = getUserId()
+    setUserId(uid)
+    if (uid) refresh(uid)
+  }, [refresh])
+
+  async function handleAdd() {
+    const text = newText.trim()
+    if (!text || busy) return
+    setBusy(true)
+    try {
+      const created = await apiAddMemory(userId, text)
+      setMemories((prev) => [created, ...prev])
+      setNewText('')
+    } catch {
+      setError('Failed to add memory.')
+    } finally {
+      setBusy(false)
+    }
   }
 
-  function removeMemory(key: string) {
-    setMemories((prev) => prev.filter((m) => m.key !== key))
+  async function handleRemove(key: string) {
+    const prev = memories
+    setMemories((cur) => cur.filter((m) => m.key !== key))
+    try {
+      await apiDeleteMemory(userId, key)
+    } catch {
+      setMemories(prev)
+      setError('Failed to delete memory.')
+    }
+  }
+
+  async function handleClear() {
+    if (busy || memories.length === 0) return
+    setBusy(true)
+    try {
+      await apiClearMemories(userId)
+      setMemories([])
+    } catch {
+      setError('Failed to clear memories.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -57,9 +91,14 @@ export default function MemoryPage() {
         <p className="font-mono text-xs uppercase tracking-widest text-accent-cyan">
           // memory_demo
         </p>
-        <h1 className="text-2xl font-bold text-text-primary">Memory Demo</h1>
+        <h1 className="text-2xl font-bold text-text-primary">Long-term Memory</h1>
         <p className="text-sm text-text-secondary">
-          Redis-backed key-value memory store — persists context across agent turns.
+          Cross-thread facts the agent remembers about you. Stored in Postgres via LangGraph&apos;s{' '}
+          <code className="font-mono text-xs text-accent-cyan">AsyncPostgresStore</code> under{' '}
+          <code className="font-mono text-xs text-accent-cyan">
+            (&quot;memories&quot;, user_id)
+          </code>
+          .
         </p>
       </div>
 
@@ -68,35 +107,50 @@ export default function MemoryPage() {
         <div className="flex items-center gap-3">
           <Brain className="h-5 w-5 text-accent-cyan" />
           <div>
-            <p className="font-mono text-xs text-text-muted">session_id</p>
-            <p className="font-mono text-sm text-accent-cyan">{sessionId}</p>
+            <p className="font-mono text-xs text-text-muted">user_id</p>
+            <p className="font-mono text-sm text-accent-cyan">{userId || '…'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="font-mono text-xs text-text-muted">
-            {memories.length} entries in memory
+            {memories.length} {memories.length === 1 ? 'entry' : 'entries'}
           </span>
           <button
-            onClick={() => setMemories([])}
-            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-mono text-xs text-text-muted transition-all hover:border-red-500/30 hover:text-red-400"
+            onClick={() => userId && refresh(userId)}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-mono text-xs text-text-muted transition-all hover:border-accent-cyan/30 hover:text-accent-cyan disabled:opacity-50"
           >
-            <Trash2 className="h-3 w-3" /> clear
+            <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} /> refresh
           </button>
           <button
-            onClick={() => setMemories(MOCK_MEMORIES)}
-            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-mono text-xs text-text-muted transition-all hover:border-accent-cyan/30 hover:text-accent-cyan"
+            onClick={handleClear}
+            disabled={busy || memories.length === 0}
+            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-mono text-xs text-text-muted transition-all hover:border-red-500/30 hover:text-red-400 disabled:opacity-50"
           >
-            <RefreshCw className="h-3 w-3" /> reset
+            <Trash2 className="h-3 w-3" /> clear all
           </button>
         </div>
       </div>
 
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 font-mono text-xs text-red-400">
+          {error}
+        </div>
+      )}
+
       {/* Memory entries */}
       <div className="mb-6 space-y-3">
-        {memories.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center rounded-lg border border-dashed border-border py-12">
+            <Loader2 className="h-5 w-5 animate-spin text-accent-cyan/50" />
+          </div>
+        ) : memories.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center">
             <Brain className="mb-3 h-8 w-8 text-accent-cyan/30" />
-            <p className="font-mono text-sm text-text-muted">Memory cleared</p>
+            <p className="font-mono text-sm text-text-muted">No memories yet</p>
+            <p className="mt-1 font-mono text-xs text-text-muted/70">
+              Chat with the agent or add an entry below.
+            </p>
           </div>
         ) : (
           memories.map((mem) => (
@@ -106,14 +160,30 @@ export default function MemoryPage() {
             >
               <div className="flex-1 pr-4">
                 <div className="mb-1 flex items-center gap-2">
-                  <span className="font-mono text-xs text-accent-cyan">{mem.key}</span>
-                  <span className="font-mono text-xs text-text-muted">{mem.timestamp}</span>
+                  <span
+                    className={`flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${
+                      mem.source === 'auto'
+                        ? 'bg-accent-cyan/10 text-accent-cyan'
+                        : 'bg-accent-green/10 text-accent-green'
+                    }`}
+                  >
+                    {mem.source === 'auto' ? (
+                      <Sparkles className="h-2.5 w-2.5" />
+                    ) : (
+                      <Hand className="h-2.5 w-2.5" />
+                    )}
+                    {mem.source}
+                  </span>
+                  <span className="font-mono text-xs text-text-muted">
+                    {formatTimestamp(mem.created_at)}
+                  </span>
                 </div>
-                <p className="text-sm text-text-secondary">{mem.value}</p>
+                <p className="text-sm text-text-secondary">{mem.text}</p>
               </div>
               <button
-                onClick={() => removeMemory(mem.key)}
+                onClick={() => handleRemove(mem.key)}
                 className="shrink-0 rounded p-1 text-text-muted opacity-0 transition-all group-hover:opacity-100 hover:text-red-400"
+                aria-label="Delete memory"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -129,33 +199,30 @@ export default function MemoryPage() {
         </h2>
         <div className="flex flex-col gap-3">
           <input
-            value={newKey}
-            onChange={(e) => setNewKey(e.target.value)}
-            placeholder="key (e.g. user_goal)"
-            className="rounded-lg border border-border bg-surface-2 px-4 py-2.5 font-mono text-sm text-text-primary placeholder-text-muted outline-none transition-all focus:border-accent-cyan/50"
-          />
-          <input
-            value={newValue}
-            onChange={(e) => setNewValue(e.target.value)}
-            placeholder="value"
-            onKeyDown={(e) => e.key === 'Enter' && addMemory()}
+            value={newText}
+            onChange={(e) => setNewText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+            placeholder="e.g. Prefers concise answers with code examples"
             className="rounded-lg border border-border bg-surface-2 px-4 py-2.5 text-sm text-text-primary placeholder-text-muted outline-none transition-all focus:border-accent-cyan/50"
           />
           <button
-            onClick={addMemory}
-            disabled={!newKey.trim() || !newValue.trim()}
+            onClick={handleAdd}
+            disabled={!newText.trim() || busy}
             className="flex items-center justify-center gap-2 rounded-lg border border-accent-cyan/50 bg-accent-cyan/10 px-4 py-2.5 text-sm font-medium text-accent-cyan transition-all hover:bg-accent-cyan/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Plus className="h-4 w-4" /> Add Entry
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            Add Entry
           </button>
         </div>
       </div>
 
       <div className="mt-4 rounded-lg border border-border bg-surface p-4">
         <p className="font-mono text-xs text-text-muted">
-          <span className="text-accent-cyan">{'>'}</span> In production, this memory is stored in
-          Redis and retrieved by session_id on every agent turn. The agent uses it to maintain
-          context across multiple conversations.
+          <span className="text-accent-cyan">{'>'}</span> The agent&apos;s graph has{' '}
+          <code className="text-accent-cyan">load_memory</code> and{' '}
+          <code className="text-accent-cyan">save_memory</code> nodes. On every turn it pulls
+          relevant facts for your <code className="text-accent-cyan">user_id</code> and, after
+          replying, extracts new durable facts via the LLM and persists them here.
         </p>
       </div>
     </div>

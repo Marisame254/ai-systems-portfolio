@@ -19,12 +19,13 @@ export type ChatStreamEvent =
 
 export async function* streamChat(
   message: string,
-  threadId: string
+  threadId: string,
+  userId?: string
 ): AsyncGenerator<ChatStreamEvent> {
   const res = await fetch(`${API_BASE}/api/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, thread_id: threadId }),
+    body: JSON.stringify({ message, thread_id: threadId, user_id: userId }),
   })
 
   if (!res.ok) throw new Error(`API error: ${res.status}`)
@@ -172,6 +173,52 @@ export async function getThreadState(threadId: string): Promise<ThreadState> {
 
 export async function getThreadHistory(threadId: string): Promise<ThreadHistory> {
   const res = await fetch(`${API_BASE}/api/agents/state/${threadId}/history`)
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  return res.json()
+}
+
+// === Long-term memory ===
+
+export interface MemoryEntry {
+  key: string
+  text: string
+  source: 'auto' | 'manual'
+  created_at: string
+}
+
+export interface MemoryListResponse {
+  user_id: string
+  entries: MemoryEntry[]
+}
+
+export async function listMemories(userId: string): Promise<MemoryListResponse> {
+  const res = await fetch(`${API_BASE}/api/memory/${encodeURIComponent(userId)}`)
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  return res.json()
+}
+
+export async function addMemory(userId: string, text: string): Promise<MemoryEntry> {
+  const res = await fetch(`${API_BASE}/api/memory/${encodeURIComponent(userId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  return res.json()
+}
+
+export async function deleteMemory(userId: string, key: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE}/api/memory/${encodeURIComponent(userId)}/${encodeURIComponent(key)}`,
+    { method: 'DELETE' }
+  )
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+}
+
+export async function clearMemories(userId: string): Promise<{ deleted: number }> {
+  const res = await fetch(`${API_BASE}/api/memory/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+  })
   if (!res.ok) throw new Error(`API error: ${res.status}`)
   return res.json()
 }

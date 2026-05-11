@@ -18,6 +18,7 @@ import {
   removeThreadId,
   MAX_THREADS,
 } from '@/lib/thread-store'
+import { getUserId } from '@/lib/user'
 import { MessageBubble, type ChatMessageView, type ToolCall } from '@/components/chat/message-bubble'
 import { Send, Bot, Plus, Trash2, MessageSquare, Activity, AlertTriangle } from 'lucide-react'
 
@@ -149,7 +150,7 @@ export default function ChatPage() {
     setIsStreaming(true)
 
     try {
-      for await (const event of streamChat(messageText, activeThreadId)) {
+      for await (const event of streamChat(messageText, activeThreadId, getUserId())) {
         setMessages((prev) => {
           const updated = [...prev]
           const last = { ...updated[updated.length - 1] }

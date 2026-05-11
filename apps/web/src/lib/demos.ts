@@ -41,6 +41,6 @@ export const demos: Demo[] = [
     href: '/demos/memory',
     icon: Brain,
     accentColor: 'cyan',
-    badge: 'Preview',
+    badge: 'Live',
   },
 ]
