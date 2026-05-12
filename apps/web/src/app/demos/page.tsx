@@ -1,21 +1,19 @@
-import type { Metadata } from 'next'
+'use client'
+
 import { DemoCard } from '@/components/demos/demo-card'
 import { demos } from '@/lib/demos'
-
-export const metadata: Metadata = {
-  title: 'Demos | Marisame — AI Systems Engineer',
-}
+import { useLanguage } from '@/lib/i18n/provider'
 
 export default function DemosPage() {
+  const { t } = useLanguage()
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16">
       <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-accent-green sm:text-xs">
-        // ai_demos
+        {t.demosPage.label}
       </p>
-      <h1 className="mb-4 text-2xl font-bold text-text-primary sm:text-4xl">AI Systems Demos</h1>
+      <h1 className="mb-4 text-2xl font-bold text-text-primary sm:text-4xl">{t.demosPage.title}</h1>
       <p className="mb-10 max-w-2xl text-sm text-text-secondary sm:mb-12 sm:text-base">
-        Interactive demonstrations of AI engineering patterns — from streaming chat to multi-agent
-        graphs. Each demo showcases a real architecture pattern used in production AI systems.
+        {t.demosPage.description}
       </p>
       <div className="grid gap-6 sm:grid-cols-2">
         {demos.map((demo) => (

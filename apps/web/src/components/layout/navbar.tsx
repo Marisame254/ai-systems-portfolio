@@ -4,16 +4,19 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Menu, Terminal, X } from 'lucide-react'
-
-const navLinks = [
-  { href: '/', label: 'Home' },
-  { href: '/cv', label: 'CV' },
-  { href: '/demos', label: 'Demos' },
-]
+import { useLanguage } from '@/lib/i18n/provider'
+import { LanguageToggle } from './language-toggle'
 
 export function Navbar() {
   const pathname = usePathname()
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
+
+  const navLinks = [
+    { href: '/', label: t.navbar.home },
+    { href: '/cv', label: t.navbar.cv },
+    { href: '/demos', label: t.navbar.demos },
+  ]
 
   useEffect(() => {
     setOpen(false)
@@ -53,13 +56,14 @@ export function Navbar() {
               {link.label}
             </Link>
           ))}
+          <LanguageToggle />
           <a
             href="https://github.com/marisame254"
             target="_blank"
             rel="noopener noreferrer"
             className="rounded-md border border-border px-3 py-1.5 font-mono text-xs text-text-secondary transition-all hover:border-accent-green/50 hover:text-accent-green"
           >
-            github
+            {t.navbar.github}
           </a>
         </nav>
 
@@ -67,7 +71,7 @@ export function Navbar() {
         <button
           onClick={() => setOpen((v) => !v)}
           className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-text-secondary transition-colors hover:border-accent-green/50 hover:text-accent-green md:hidden"
-          aria-label={open ? 'Close menu' : 'Open menu'}
+          aria-label={open ? t.navbar.closeMenu : t.navbar.openMenu}
           aria-expanded={open}
         >
           {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
@@ -108,6 +112,10 @@ export function Navbar() {
                 <span className="text-text-muted">→</span>
               </Link>
             ))}
+            <div className="mt-1 flex items-center justify-between rounded-md border border-border px-3 py-3">
+              <span className="font-mono text-xs text-text-muted">{t.navbar.language}</span>
+              <LanguageToggle />
+            </div>
             <a
               href="https://github.com/marisame254"
               target="_blank"
@@ -115,7 +123,7 @@ export function Navbar() {
               onClick={() => setOpen(false)}
               className="mt-1 flex items-center justify-between rounded-md border border-border px-3 py-3 font-mono text-sm text-text-secondary transition-all hover:border-accent-green/50 hover:text-accent-green"
             >
-              <span>github</span>
+              <span>{t.navbar.github}</span>
               <span className="text-text-muted">↗</span>
             </a>
           </div>

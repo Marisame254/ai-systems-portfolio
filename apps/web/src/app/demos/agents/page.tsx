@@ -14,6 +14,8 @@ import {
 import '@xyflow/react/dist/style.css'
 import Link from 'next/link'
 import { getAgentGraph, type AgentGraph, type AgentGraphNode } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/provider'
+import type { Dictionary } from '@/lib/i18n'
 import {
   AlertCircle,
   Activity,
@@ -109,9 +111,11 @@ function NodeIcon({ type }: { type: string }) {
 function NodeDetailPanel({
   node,
   onClose,
+  ta,
 }: {
   node: AgentGraphNode
   onClose: () => void
+  ta: Dictionary['agentsDemo']
 }) {
   const [promptOpen, setPromptOpen] = useState(false)
   const meta = node.meta ?? {}
@@ -129,7 +133,7 @@ function NodeDetailPanel({
         <button
           onClick={onClose}
           className="rounded p-1 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
-          aria-label="Close"
+          aria-label={ta.closeAria}
         >
           <X className="h-4 w-4" />
         </button>
@@ -140,13 +144,13 @@ function NodeDetailPanel({
           <div className="space-y-3">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
-                provider
+                {ta.panel.provider}
               </p>
-              <p className="font-mono text-accent-cyan">{meta.provider ?? 'unknown'}</p>
+              <p className="font-mono text-accent-cyan">{meta.provider ?? ta.panel.unknown}</p>
             </div>
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">model</p>
-              <p className="font-mono text-text-primary">{meta.model ?? 'unknown'}</p>
+              <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">{ta.panel.model}</p>
+              <p className="font-mono text-text-primary">{meta.model ?? ta.panel.unknown}</p>
             </div>
             {meta.system_prompt && (
               <div>
@@ -157,7 +161,7 @@ function NodeDetailPanel({
                   <ChevronDown
                     className={`h-3 w-3 transition-transform ${promptOpen ? '' : '-rotate-90'}`}
                   />
-                  system prompt
+                  {ta.panel.systemPrompt}
                 </button>
                 {promptOpen && (
                   <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-border bg-[#0a0a0a] p-2 text-[11px] leading-relaxed text-text-secondary">
@@ -167,10 +171,7 @@ function NodeDetailPanel({
               </div>
             )}
             <p className="border-t border-border pt-3 leading-relaxed text-text-muted">
-              Invokes the LLM with the bound tools. The response is appended to{' '}
-              <span className="font-mono">state.messages</span>; if it contains{' '}
-              <span className="font-mono">tool_calls</span>, the conditional edge routes to{' '}
-              <span className="font-mono text-accent-purple">tools</span>.
+              {ta.panel.llmDescription}
             </p>
           </div>
         )}
@@ -178,40 +179,38 @@ function NodeDetailPanel({
         {node.type === 'tool' && (
           <div className="space-y-3">
             <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
-              bound tools ({meta.tools?.length ?? 0})
+              {ta.panel.boundTools(meta.tools?.length ?? 0)}
             </p>
             {meta.tools && meta.tools.length > 0 ? (
-              meta.tools.map((t) => (
+              meta.tools.map((tool) => (
                 <div
-                  key={t.name}
+                  key={tool.name}
                   className="rounded-md border border-border bg-[#0a0a0a] p-3"
                 >
                   <div className="flex items-center gap-2">
                     <Hammer className="h-3.5 w-3.5 text-accent-purple" />
-                    <span className="font-mono text-sm text-accent-purple">{t.name}</span>
+                    <span className="font-mono text-sm text-accent-purple">{tool.name}</span>
                   </div>
                   <p className="mt-2 leading-relaxed text-text-secondary">
-                    {t.description || <span className="italic text-text-muted">no description</span>}
+                    {tool.description || <span className="italic text-text-muted">{ta.panel.noDescription}</span>}
                   </p>
                 </div>
               ))
             ) : (
               <p className="italic text-text-muted">
-                No tools wired. Set <span className="font-mono">TAVILY_API_KEY</span> to enable web
-                search.
+                {ta.panel.noTools} <span className="font-mono">TAVILY_API_KEY</span>{' '}
+                {ta.panel.noToolsTail}
               </p>
             )}
             <p className="border-t border-border pt-3 leading-relaxed text-text-muted">
-              <span className="font-mono">ToolNode</span> executes whichever tool the LLM requested
-              and appends the result to <span className="font-mono">state.messages</span>, then loops
-              back to <span className="font-mono text-accent-cyan">agent</span>.
+              {ta.panel.toolDescription}
             </p>
           </div>
         )}
 
         {(node.type === 'start' || node.type === 'end') && (
           <p className="leading-relaxed text-text-secondary">
-            {meta.description ?? 'Built-in LangGraph node.'}
+            {meta.description ?? ta.panel.builtIn}
           </p>
         )}
       </div>
@@ -220,6 +219,8 @@ function NodeDetailPanel({
 }
 
 export default function AgentsPage() {
+  const { t } = useLanguage()
+  const ta = t.agentsDemo
   const [graph, setGraph] = useState<AgentGraph | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -269,30 +270,27 @@ export default function AgentsPage() {
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
       <div className="mb-5 sm:mb-6">
         <p className="font-mono text-[10px] uppercase tracking-widest text-accent-green sm:text-xs">
-          // agent_visualization
+          {ta.label}
         </p>
-        <h1 className="text-xl font-bold text-text-primary sm:text-2xl">
-          LangGraph Agent Graph
-        </h1>
+        <h1 className="text-xl font-bold text-text-primary sm:text-2xl">{ta.title}</h1>
         <p className="text-xs text-text-secondary sm:text-sm">
-          Tool-calling agent · <span className="font-mono">agent ↔ tools</span> loop with conditional
-          edge · click any node for details
+          {ta.subtitlePrefix} <span className="font-mono">{ta.loopText}</span> {ta.subtitleSuffix}
         </p>
       </div>
 
       {/* Legend */}
       <div className="mb-4 flex flex-wrap gap-4 font-mono text-xs text-text-muted">
         <span>
-          <span className="text-accent-green">■</span> start / end
+          <span className="text-accent-green">■</span> {ta.legend.startEnd}
         </span>
         <span>
-          <span className="text-accent-cyan">■</span> agent (llm)
+          <span className="text-accent-cyan">■</span> {ta.legend.llm}
         </span>
         <span>
-          <span className="text-accent-purple">■</span> tools
+          <span className="text-accent-purple">■</span> {ta.legend.tools}
         </span>
         <span>
-          <span className="text-accent-cyan">⇢</span> conditional edge
+          <span className="text-accent-cyan">⇢</span> {ta.legend.conditional}
         </span>
       </div>
 
@@ -303,10 +301,8 @@ export default function AgentsPage() {
               <div className="flex max-w-md items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/5 p-4 font-mono text-xs">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
                 <div>
-                  <p className="text-red-400">Could not load agent graph.</p>
-                  <p className="mt-1 text-text-muted">
-                    Is the backend running on /api/agents/graph?
-                  </p>
+                  <p className="text-red-400">{ta.errorTitle}</p>
+                  <p className="mt-1 text-text-muted">{ta.errorHint}</p>
                   <p className="mt-2 text-text-muted/60">{error}</p>
                 </div>
               </div>
@@ -315,7 +311,7 @@ export default function AgentsPage() {
             <div className="flex h-full items-center justify-center bg-[#0a0a0a]">
               <div className="flex items-center gap-2 font-mono text-xs text-text-muted">
                 <Loader2 className="h-4 w-4 animate-spin text-accent-green" />
-                loading graph...
+                {ta.loading}
               </div>
             </div>
           ) : (
@@ -344,24 +340,20 @@ export default function AgentsPage() {
         </div>
 
         {selectedNode && (
-          <NodeDetailPanel node={selectedNode} onClose={() => setSelectedId(null)} />
+          <NodeDetailPanel node={selectedNode} onClose={() => setSelectedId(null)} ta={ta} />
         )}
       </div>
 
       <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-lg border border-border bg-surface p-4 sm:flex-row sm:items-center sm:gap-4">
         <p className="font-mono text-xs leading-relaxed text-text-muted">
-          <span className="text-accent-green">{'>'}</span> Click any node to inspect it: see the
-          model and system prompt for <span className="text-accent-cyan">agent</span>, the bound
-          tools and their descriptions for <span className="text-accent-purple">tools</span>, or the
-          role of <span className="text-accent-green">__start__</span> /{' '}
-          <span className="text-accent-green">__end__</span> in the LangGraph runtime.
+          <span className="text-accent-green">{'>'}</span> {ta.footer}
         </p>
         <Link
           href="/demos/state"
           className="flex shrink-0 items-center gap-1.5 rounded-md border border-accent-cyan/30 bg-accent-cyan/5 px-3 py-1.5 font-mono text-xs text-accent-cyan transition-colors hover:bg-accent-cyan/10"
         >
           <Activity className="h-3 w-3" />
-          inspect state →
+          {ta.inspectState}
         </Link>
       </div>
     </div>

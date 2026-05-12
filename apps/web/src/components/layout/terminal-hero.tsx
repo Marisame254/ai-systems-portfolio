@@ -1,23 +1,30 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-
-const lines = [
-  { text: 'AI Systems Engineer', delay: 300 },
-  { text: 'LangGraph · RAG · Multi-Agent · LLM', delay: 900 },
-  { text: 'Building AI that thinks in graphs', delay: 1500 },
-]
+import { useLanguage } from '@/lib/i18n/provider'
 
 export function TerminalHero() {
+  const { t, locale } = useLanguage()
+  const lines = [
+    { text: t.hero.role, delay: 300 },
+    { text: t.hero.stack, delay: 900 },
+    { text: t.hero.tagline, delay: 1500 },
+  ]
   const [visibleLines, setVisibleLines] = useState<number[]>([])
 
   useEffect(() => {
-    lines.forEach((line, i) => {
+    setVisibleLines([])
+    const timeouts = lines.map((line, i) =>
       setTimeout(() => {
         setVisibleLines((prev) => [...prev, i])
       }, line.delay)
-    })
-  }, [])
+    )
+    return () => {
+      timeouts.forEach(clearTimeout)
+    }
+    // re-run when locale changes so animation replays with translated copy
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale])
 
   return (
     <div className="w-full max-w-3xl">

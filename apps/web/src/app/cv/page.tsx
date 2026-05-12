@@ -1,34 +1,26 @@
-import type { Metadata } from 'next'
+'use client'
 
-export const metadata: Metadata = {
-  title: 'CV | Raul Vasquez — Machine Learning Engineer',
-}
+import { useLanguage } from '@/lib/i18n/provider'
 
-const summary =
-  'Machine Learning Engineer with solid experience in AI, data engineering, and cloud computing. ' +
-  'Specialized in designing, optimizing, and deploying scalable ML systems and full-stack applications. ' +
-  'Builds advanced agent-based architectures and retrieval-augmented generation (RAG) systems with ' +
-  'LangChain/LangGraph, integrating tool orchestration, persistent memory, and human-in-the-loop workflows.'
-
-const skills: Record<string, string[]> = {
-  'AI Agents & Orchestration': [
+const skillItems: Record<string, string[]> = {
+  agents: [
     'LangGraph (checkpointer, store, HITL middleware)',
     'LangChain agents (deepagents, create_agent)',
     'Tool orchestration & multi-step reasoning',
     'Streaming token responses (SSE / WebSocket)',
   ],
-  'RAG & Vector Search': [
+  rag: [
     'PGvector, Chromadb',
     'Hugging Face & Ollama embeddings',
     'Hybrid retrieval',
     'Document chunking & ingestion',
   ],
-  'MCP (Model Context Protocol)': [
+  mcp: [
     'MCP servers (fastapi-mcp, FastMCP)',
     'MCP clients (MultiServerMCPClient)',
     'MCP Oauth & API key authentication',
   ],
-  'Backend & Data': [
+  backend: [
     'FastAPI',
     'SQLAlchemy async + asyncpg',
     'Alembic',
@@ -38,7 +30,7 @@ const skills: Record<string, string[]> = {
     'Polymorphic RBAC',
     'Multi-tenant architecture',
   ],
-  'ML & Deep Learning': [
+  ml: [
     'TensorFlow',
     'PyTorch',
     'Scikit-learn',
@@ -47,160 +39,92 @@ const skills: Record<string, string[]> = {
     'LLM fine-tuning (LLaMA)',
     'Prompt engineering',
   ],
-  Frontend: [
-    'React',
-    'Next.js (App Router)',
-    'React Router v7',
-    'TailwindCSS',
-    'TypeScript',
-  ],
-  'Cloud & DevOps': ['AWS', 'Docker', 'Kubernetes', 'CI/CD (Python + Bash)'],
-  'Languages & Tools': [
-    'Python',
-    'TypeScript',
-    'Go (GraphQL)',
-    'SQL',
-    'uv',
-    'pnpm',
-    'Git',
-  ],
+  frontend: ['React', 'Next.js (App Router)', 'React Router v7', 'TailwindCSS', 'TypeScript'],
+  cloud: ['AWS', 'Docker', 'Kubernetes', 'CI/CD (Python + Bash)'],
+  languages: ['Python', 'TypeScript', 'Go (GraphQL)', 'SQL', 'uv', 'pnpm', 'Git'],
 }
 
-interface ExperienceBlock {
-  bullets?: string[]
-  groups?: { heading: string; bullets: string[] }[]
-}
-
-const experience: (ExperienceBlock & {
-  title: string
-  company: string
-  location: string
-  period: string
-})[] = [
+const projectMeta = [
   {
-    title: 'Full-Stack Developer & AI Engineer',
-    company: 'W3bInnovation',
-    location: 'Remote',
-    period: '2025 – Present',
-    bullets: [
-      'Designed and deployed intelligent-agent architectures with LangChain & LangGraph — agent workflows, tool orchestration, persistent memory (PostgreSQL checkpointer + store), and structured decision pipelines.',
-      'Built multi-tenant RAG systems with pgvector and Ollama embeddings, improving factual consistency and traceability of conversational AI for enterprise clients.',
-      'Implemented an MCP server (fastapi-mcp) exposing project, document, and RAG tools to external agents — with API-key authentication, scoped permissions, and request logging.',
-      'Developed FastAPI services for LLM inference, authentication, session management, and agent lifecycle orchestration; designed a polymorphic RBAC system with resource-grant inheritance (organization → project → conversation).',
-      'Built React + TailwindCSS + React Router v7 frontends with WebSocket streaming for real-time agent token responses, tool-use indicators, and human-in-the-loop interrupts.',
-    ],
-  },
-  {
-    title: 'Machine Learning Engineer',
-    company: 'Datyra',
-    location: 'San Diego, USA',
-    period: '2022 – 2024',
-    groups: [
-      {
-        heading: 'ML & Data Modeling',
-        bullets: [
-          'Developed and deployed scalable ML systems with TensorFlow, PyTorch, Scikit-learn, and Keras: regression, classification, clustering.',
-          'Fine-tuned vision-language and LLM models (X-CLIP, LLaMA) for object detection, semantic understanding, and domain-specific response generation.',
-          'Built LLM-powered systems for automated reporting, structured data analysis, and conversational interfaces using prompt engineering and customized RAG pipelines.',
-        ],
-      },
-      {
-        heading: 'Cloud & Data',
-        bullets: [
-          'Managed PostgreSQL, MySQL, MongoDB; designed scalable architectures on AWS and Azure.',
-        ],
-      },
-      {
-        heading: 'Automation & Deployment',
-        bullets: [
-          'Designed automated training/validation/deployment pipelines (Python + Bash, CI/CD); deployed containerized apps via Docker and Kubernetes.',
-        ],
-      },
-      {
-        heading: 'Software & Web',
-        bullets: [
-          'Implemented GraphQL services in Go; integrated Stripe payments and referral systems; built secure RBAC authentication.',
-        ],
-      },
-      {
-        heading: 'Productivity & Visualization',
-        bullets: [
-          'Built dashboards and internal tools with Apache Superset, Mercury, and Retool; managed audience segmentation via Mailchimp.',
-        ],
-      },
-    ],
-  },
-]
-
-const projects = [
-  {
-    name: 'AI Systems Portfolio',
-    description:
-      'This monorepo — Next.js 14 + FastAPI + LangGraph + pgvector. Live demos for streaming chat, RAG, and agent visualization. Provider-agnostic LLM (Ollama in dev, OpenAI in prod).',
+    key: 'portfolio',
     tech: ['Next.js', 'FastAPI', 'LangGraph', 'pgvector', 'Turborepo'],
     href: 'https://github.com/marisame254/ai-systems-portfolio',
   },
   {
-    name: 'Lyra',
-    description:
-      'Python CLI agent with MCP tool integration, persistent memory (filesystem + PostgreSQL), configurable models (Ollama local + cloud), and thread management.',
+    key: 'lyra',
     tech: ['Python', 'DeepAgents', 'MCP', 'Ollama', 'PostgreSQL'],
   },
   {
-    name: 'mcp-servers',
-    description:
-      'Chat platform on LangGraph + Chainlit + MCP. Uses AsyncPostgresSaver/Store, summarization / HITL / todo-list middleware, and multi-server MCP integration.',
+    key: 'mcpServers',
     tech: ['LangGraph', 'Chainlit', 'MCP', 'Ollama', 'PostgreSQL'],
   },
   {
-    name: 'Enterprise RAG Platform',
-    description:
-      'Client project (anonymized). FastAPI backend with LangGraph SDK; React Router v7 + Tailwind v4 frontend. Polymorphic RBAC, MCP server with API keys, conversation sharing, WebSocket token streaming.',
+    key: 'enterpriseRag',
     tech: ['FastAPI', 'LangGraph SDK', 'React Router v7', 'pgvector', 'fastapi-mcp'],
   },
-]
-
-const education = [
-  {
-    degree: 'Master in Robotics',
-    institution: 'Universidad Tecnológica de la Mixteca',
-    period: '2019 – 2021',
-  },
-  {
-    degree: 'Bachelor in Mechatronics',
-    institution: 'Universidad Tecnológica de la Mixteca',
-    period: '2014 – 2019',
-  },
-]
-
-const languages = [
-  { name: 'Spanish', level: 'Native' },
-  { name: 'English', level: 'Proficient' },
-]
-
-const certifications = [
-  'Applied Data Science with Python Specialization (Mar 2022)',
-  "SQL and PostgreSQL: The Complete Developer's Guide (Feb 2022)",
-  'IBM Data Engineering Specialization (Feb 2022)',
-  'NoSQL, Big Data, and Spark Foundations Specialization (Apr 2022)',
-  'BI Foundations with SQL, ETL, and Data Warehousing Specialization (Apr 2022)',
-  'Python for Everybody Specialization (Feb 2022)',
-]
+] as const
 
 export default function CVPage() {
+  const { t } = useLanguage()
+  const cv = t.cv
+
+  const skillEntries: { category: string; items: string[] }[] = [
+    { category: cv.skillCategories.agents, items: skillItems.agents },
+    { category: cv.skillCategories.rag, items: skillItems.rag },
+    { category: cv.skillCategories.mcp, items: skillItems.mcp },
+    { category: cv.skillCategories.backend, items: skillItems.backend },
+    { category: cv.skillCategories.ml, items: skillItems.ml },
+    { category: cv.skillCategories.frontend, items: skillItems.frontend },
+    { category: cv.skillCategories.cloud, items: skillItems.cloud },
+    { category: cv.skillCategories.languages, items: skillItems.languages },
+  ]
+
+  const experience = [
+    {
+      title: cv.experience.w3b.title,
+      company: 'W3bInnovation',
+      location: cv.experience.w3b.location,
+      period: cv.experience.w3b.period,
+      bullets: cv.experience.w3b.bullets,
+    },
+    {
+      title: cv.experience.datyra.title,
+      company: 'Datyra',
+      location: cv.experience.datyra.location,
+      period: cv.experience.datyra.period,
+      groups: [
+        cv.experience.datyra.groups.ml,
+        cv.experience.datyra.groups.cloud,
+        cv.experience.datyra.groups.automation,
+        cv.experience.datyra.groups.software,
+        cv.experience.datyra.groups.productivity,
+      ],
+    },
+  ]
+
+  const projects = projectMeta.map((p) => {
+    const dict = cv.projects[p.key]
+    return { name: dict.name, description: dict.description, tech: p.tech, href: 'href' in p ? p.href : undefined }
+  })
+
+  const education = [
+    cv.education.masters,
+    cv.education.bachelors,
+  ]
+
+  const languages = [cv.languages.spanish, cv.languages.english]
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-16">
       {/* Header */}
       <div className="mb-10 border-b border-border pb-8 sm:mb-12 sm:pb-12">
         <p className="mb-2 font-mono text-xs uppercase tracking-widest text-accent-green">
-          // curriculum_vitae
+          {cv.label}
         </p>
         <h1 className="mb-2 text-3xl font-bold text-gradient-green sm:text-4xl md:text-5xl">
-          Raul Vasquez
+          {cv.name}
         </h1>
-        <p className="mb-6 text-base text-text-secondary sm:text-xl">
-          Machine Learning Engineer · AI Systems
-        </p>
+        <p className="mb-6 text-base text-text-secondary sm:text-xl">{cv.subtitle}</p>
         <div className="flex flex-wrap gap-x-5 gap-y-2 font-mono text-xs sm:text-sm">
           <a
             href="mailto:rulivas26@gmail.com"
@@ -208,7 +132,7 @@ export default function CVPage() {
           >
             rulivas26@gmail.com
           </a>
-          <span className="text-text-muted">Oaxaca de Juárez, México</span>
+          <span className="text-text-muted">{cv.location}</span>
           <a
             href="https://github.com/marisame254"
             target="_blank"
@@ -223,20 +147,20 @@ export default function CVPage() {
       {/* Summary */}
       <section className="mb-12 sm:mb-16">
         <p className="mb-6 font-mono text-xs uppercase tracking-widest text-accent-green">
-          // summary
+          {cv.sections.summary}
         </p>
         <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
-          <p className="text-sm leading-relaxed text-text-secondary">{summary}</p>
+          <p className="text-sm leading-relaxed text-text-secondary">{cv.summary}</p>
         </div>
       </section>
 
       {/* Skills */}
       <section className="mb-12 sm:mb-16">
         <p className="mb-8 font-mono text-xs uppercase tracking-widest text-accent-green">
-          // skills
+          {cv.sections.skills}
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
-          {Object.entries(skills).map(([category, items]) => (
+          {skillEntries.map(({ category, items }) => (
             <div key={category} className="rounded-lg border border-border bg-surface p-4 sm:p-5">
               <h3 className="mb-3 font-mono text-sm text-text-secondary">{category}</h3>
               <div className="flex flex-wrap gap-2">
@@ -257,7 +181,7 @@ export default function CVPage() {
       {/* Experience */}
       <section className="mb-12 sm:mb-16">
         <p className="mb-8 font-mono text-xs uppercase tracking-widest text-accent-green">
-          // experience
+          {cv.sections.experience}
         </p>
         <div className="space-y-6">
           {experience.map((exp, i) => (
@@ -270,7 +194,7 @@ export default function CVPage() {
                 {exp.company} · <span className="text-text-muted">{exp.location}</span>
               </p>
 
-              {exp.bullets && (
+              {'bullets' in exp && exp.bullets && (
                 <ul className="space-y-2">
                   {exp.bullets.map((point, j) => (
                     <li key={j} className="flex gap-2 text-sm text-text-secondary">
@@ -281,7 +205,7 @@ export default function CVPage() {
                 </ul>
               )}
 
-              {exp.groups && (
+              {'groups' in exp && exp.groups && (
                 <div className="space-y-4">
                   {exp.groups.map((group, j) => (
                     <div key={j}>
@@ -308,7 +232,7 @@ export default function CVPage() {
       {/* Projects */}
       <section className="mb-12 sm:mb-16">
         <p className="mb-8 font-mono text-xs uppercase tracking-widest text-accent-green">
-          // projects
+          {cv.sections.projects}
         </p>
         <div className="space-y-4">
           {projects.map((proj, i) => (
@@ -329,12 +253,12 @@ export default function CVPage() {
               </div>
               <p className="mb-4 text-sm text-text-secondary">{proj.description}</p>
               <div className="flex flex-wrap gap-2">
-                {proj.tech.map((t) => (
+                {proj.tech.map((tech) => (
                   <span
-                    key={t}
+                    key={tech}
                     className="rounded border border-accent-cyan/20 bg-accent-cyan/5 px-2 py-0.5 font-mono text-xs text-accent-cyan"
                   >
-                    {t}
+                    {tech}
                   </span>
                 ))}
               </div>
@@ -346,7 +270,7 @@ export default function CVPage() {
       {/* Education */}
       <section className="mb-12 sm:mb-16">
         <p className="mb-8 font-mono text-xs uppercase tracking-widest text-accent-green">
-          // education
+          {cv.sections.education}
         </p>
         <div className="space-y-4">
           {education.map((edu, i) => (
@@ -367,7 +291,7 @@ export default function CVPage() {
       <section className="grid gap-6 sm:grid-cols-2">
         <div>
           <p className="mb-6 font-mono text-xs uppercase tracking-widest text-accent-green">
-            // languages
+            {cv.sections.languages}
           </p>
           <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
             <ul className="space-y-2">
@@ -382,11 +306,11 @@ export default function CVPage() {
         </div>
         <div>
           <p className="mb-6 font-mono text-xs uppercase tracking-widest text-accent-green">
-            // certifications
+            {cv.sections.certifications}
           </p>
           <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
             <ul className="space-y-2">
-              {certifications.map((cert) => (
+              {cv.certifications.map((cert) => (
                 <li key={cert} className="flex gap-2 text-sm text-text-secondary">
                   <span className="mt-0.5 shrink-0 text-accent-green">✓</span>
                   {cert}

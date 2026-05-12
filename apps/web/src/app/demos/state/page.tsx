@@ -14,6 +14,8 @@ import {
 import { loadThreadIds } from '@/lib/thread-store'
 import { MessageBubble, type ChatMessageView, type ToolCall } from '@/components/chat/message-bubble'
 import { AlertCircle, Clock, Layers, Loader2 } from 'lucide-react'
+import { useLanguage } from '@/lib/i18n/provider'
+import type { Dictionary } from '@/lib/i18n'
 
 function hydrate(serialized: SerializedMessage[]): ChatMessageView[] {
   const result: ChatMessageView[] = []
@@ -39,6 +41,8 @@ function hydrate(serialized: SerializedMessage[]): ChatMessageView[] {
 
 function StatePageInner() {
   const router = useRouter()
+  const { t } = useLanguage()
+  const ts = t.stateDemo
   const searchParams = useSearchParams()
   const queryThread = searchParams.get('thread')
 
@@ -90,27 +94,23 @@ function StatePageInner() {
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
       <div className="mb-5 sm:mb-6">
         <p className="font-mono text-[10px] uppercase tracking-widest text-accent-green sm:text-xs">
-          // state_inspector
+          {ts.label}
         </p>
-        <h1 className="text-xl font-bold text-text-primary sm:text-2xl">
-          LangGraph State Inspector
-        </h1>
-        <p className="text-xs text-text-secondary sm:text-sm">
-          Live view of any thread&apos;s persisted state and checkpoint history (Postgres-backed).
-        </p>
+        <h1 className="text-xl font-bold text-text-primary sm:text-2xl">{ts.title}</h1>
+        <p className="text-xs text-text-secondary sm:text-sm">{ts.description}</p>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <label className="font-mono text-xs text-text-muted">thread:</label>
+        <label className="font-mono text-xs text-text-muted">{ts.threadLabel}</label>
         <select
           value={activeThread}
           onChange={(e) => selectThread(e.target.value)}
           className="min-w-0 max-w-full flex-1 rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-xs text-text-primary outline-none focus:border-accent-cyan/50 sm:flex-none"
         >
-          {threads.length === 0 && <option value="">no threads</option>}
-          {threads.map((t) => (
-            <option key={t.thread_id} value={t.thread_id}>
-              {(t.title || t.thread_id.slice(0, 8)) + ' — ' + t.thread_id.slice(0, 8)}
+          {threads.length === 0 && <option value="">{ts.noThreads}</option>}
+          {threads.map((th) => (
+            <option key={th.thread_id} value={th.thread_id}>
+              {(th.title || th.thread_id.slice(0, 8)) + ' — ' + th.thread_id.slice(0, 8)}
             </option>
           ))}
         </select>
@@ -123,7 +123,7 @@ function StatePageInner() {
             }`}
           >
             <Layers className="h-3 w-3" />
-            current state
+            {ts.currentState}
           </button>
           <button
             onClick={() => setTab('history')}
@@ -132,7 +132,7 @@ function StatePageInner() {
             }`}
           >
             <Clock className="h-3 w-3" />
-            history
+            {ts.history}
           </button>
         </div>
       </div>
@@ -141,35 +141,41 @@ function StatePageInner() {
         <div className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/5 p-4 font-mono text-xs">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
           <div>
-            <p className="text-red-400">Could not load thread state.</p>
+            <p className="text-red-400">{ts.errorTitle}</p>
             <p className="mt-1 text-text-muted/60">{error}</p>
           </div>
         </div>
       ) : loading ? (
         <div className="flex items-center gap-2 font-mono text-xs text-text-muted">
           <Loader2 className="h-4 w-4 animate-spin text-accent-green" />
-          loading…
+          {ts.loading}
         </div>
       ) : tab === 'state' ? (
-        <StateView state={state} />
+        <StateView state={state} ts={ts} />
       ) : (
-        <HistoryView history={history} />
+        <HistoryView history={history} ts={ts} />
       )}
     </div>
   )
 }
 
-function StateView({ state }: { state: ThreadState | null }) {
-  if (!state) return <p className="font-mono text-xs text-text-muted">empty</p>
+function StateView({
+  state,
+  ts,
+}: {
+  state: ThreadState | null
+  ts: Dictionary['stateDemo']
+}) {
+  if (!state) return <p className="font-mono text-xs text-text-muted">{ts.empty}</p>
   const messages = hydrate(state.values.messages)
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr,18rem]">
       <div className="rounded-lg border border-border bg-surface p-4">
         <p className="mb-3 font-mono text-xs uppercase tracking-wider text-text-muted">
-          state.values.messages ({state.values.messages.length})
+          {ts.messagesLabel(state.values.messages.length)}
         </p>
         {messages.length === 0 ? (
-          <p className="font-mono text-xs text-text-muted">no messages yet</p>
+          <p className="font-mono text-xs text-text-muted">{ts.noMessages}</p>
         ) : (
           messages.map((m, i) => <MessageBubble key={i} msg={m} />)
         )}
@@ -178,22 +184,22 @@ function StateView({ state }: { state: ThreadState | null }) {
       <aside className="space-y-3 rounded-lg border border-border bg-surface p-4 text-xs">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
-            next nodes
+            {ts.nextNodes}
           </p>
           <p className="mt-1 font-mono text-accent-cyan">
-            {state.next.length ? state.next.join(', ') : '∅ (terminal)'}
+            {state.next.length ? state.next.join(', ') : ts.terminal}
           </p>
         </div>
         <div>
           <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
-            checkpoint id
+            {ts.checkpointId}
           </p>
           <p className="mt-1 break-all font-mono text-[10px] text-text-secondary">
             {state.checkpoint_id ?? '—'}
           </p>
         </div>
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">created</p>
+          <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">{ts.created}</p>
           <p className="mt-1 font-mono text-[10px] text-text-secondary">
             {state.created_at ?? '—'}
           </p>
@@ -203,18 +209,26 @@ function StateView({ state }: { state: ThreadState | null }) {
   )
 }
 
-function HistoryView({ history }: { history: ThreadHistory | null }) {
-  if (!history) return <p className="font-mono text-xs text-text-muted">empty</p>
+function HistoryView({
+  history,
+  ts,
+}: {
+  history: ThreadHistory | null
+  ts: Dictionary['stateDemo']
+}) {
+  if (!history) return <p className="font-mono text-xs text-text-muted">{ts.empty}</p>
   if (history.checkpoints.length === 0)
-    return <p className="font-mono text-xs text-text-muted">no checkpoints yet</p>
+    return <p className="font-mono text-xs text-text-muted">{ts.noCheckpoints}</p>
   return (
     <div className="space-y-2">
-      <p className="font-mono text-xs text-text-muted">
-        {history.checkpoints.length} checkpoint{history.checkpoints.length === 1 ? '' : 's'} (newest
-        first)
-      </p>
+      <p className="font-mono text-xs text-text-muted">{ts.checkpointsCount(history.checkpoints.length)}</p>
       {history.checkpoints.map((cp, i) => (
-        <CheckpointCard key={cp.checkpoint_id ?? i} cp={cp} index={history.checkpoints.length - i} />
+        <CheckpointCard
+          key={cp.checkpoint_id ?? i}
+          cp={cp}
+          index={history.checkpoints.length - i}
+          ts={ts}
+        />
       ))}
     </div>
   )
@@ -223,9 +237,11 @@ function HistoryView({ history }: { history: ThreadHistory | null }) {
 function CheckpointCard({
   cp,
   index,
+  ts,
 }: {
   cp: Omit<ThreadState, 'thread_id'>
   index: number
+  ts: Dictionary['stateDemo']
 }) {
   const [open, setOpen] = useState(false)
   const messages = hydrate(cp.values.messages)
@@ -239,14 +255,14 @@ function CheckpointCard({
           #{index}
         </span>
         <span className="text-text-secondary">
-          {cp.values.messages.length} msgs · next: {cp.next.length ? cp.next.join(',') : '∅'}
+          {cp.values.messages.length} {ts.msgs} · {ts.next}: {cp.next.length ? cp.next.join(',') : '∅'}
         </span>
         <span className="ml-auto text-[10px] text-text-muted">{cp.created_at ?? ''}</span>
       </button>
       {open && (
         <div className="border-t border-border p-3">
           {messages.length === 0 ? (
-            <p className="font-mono text-xs text-text-muted">empty snapshot</p>
+            <p className="font-mono text-xs text-text-muted">{ts.emptySnapshot}</p>
           ) : (
             messages.map((m, i) => <MessageBubble key={i} msg={m} />)
           )}

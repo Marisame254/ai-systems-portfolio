@@ -1,10 +1,14 @@
+'use client'
+
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { TerminalHero } from '@/components/layout/terminal-hero'
 import { DemoCard } from '@/components/demos/demo-card'
 import { demos } from '@/lib/demos'
+import { useLanguage } from '@/lib/i18n/provider'
 
 export default function HomePage() {
+  const { t } = useLanguage()
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -24,13 +28,13 @@ export default function HomePage() {
             href="/cv"
             className="flex items-center justify-center gap-2 rounded-md border border-accent-green/50 bg-accent-green/10 px-6 py-3 text-sm font-medium text-accent-green transition-all hover:bg-accent-green/20 hover:shadow-glow-green"
           >
-            View CV <ArrowRight className="h-4 w-4" />
+            {t.home.viewCv} <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
             href="/demos"
             className="flex items-center justify-center gap-2 rounded-md border border-border px-6 py-3 text-sm font-medium text-text-secondary transition-all hover:border-accent-cyan/50 hover:text-accent-cyan"
           >
-            Explore Demos
+            {t.home.exploreDemos}
           </Link>
         </div>
       </section>
@@ -38,10 +42,10 @@ export default function HomePage() {
       {/* Demo Cards Section */}
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
         <p className="mb-2 font-mono text-xs uppercase tracking-widest text-accent-green sm:text-sm">
-          // live_demos
+          {t.home.liveDemosLabel}
         </p>
         <h2 className="mb-8 text-2xl font-bold text-text-primary sm:mb-12 sm:text-3xl">
-          AI Systems in Action
+          {t.home.sectionTitle}
         </h2>
         <div className="grid gap-6 sm:grid-cols-2">
           {demos.map((demo) => (

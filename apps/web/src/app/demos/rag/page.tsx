@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { Upload, Search, FileText, Loader2 } from 'lucide-react'
 import { queryRAG, uploadDocument } from '@/lib/api'
+import { useLanguage } from '@/lib/i18n/provider'
 
 interface Source {
   content: string
@@ -16,6 +17,8 @@ interface RAGResult {
 }
 
 export default function RAGPage() {
+  const { t } = useLanguage()
+  const tr = t.ragDemo
   const [file, setFile] = useState<File | null>(null)
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'done'>('idle')
   const [query, setQuery] = useState('')
@@ -43,7 +46,7 @@ export default function RAGPage() {
       setResult(data)
     } catch {
       setResult({
-        answer: 'Error: Could not connect to the API. Is the backend running?',
+        answer: tr.connectionError,
         sources: [],
         model: 'unknown',
       })
@@ -56,18 +59,16 @@ export default function RAGPage() {
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
       <div className="mb-6 sm:mb-8">
         <p className="font-mono text-[10px] uppercase tracking-widest text-accent-cyan sm:text-xs">
-          // rag_demo
+          {tr.label}
         </p>
-        <h1 className="text-xl font-bold text-text-primary sm:text-2xl">RAG Demo</h1>
-        <p className="text-xs text-text-secondary sm:text-sm">
-          Upload a document, then ask questions. Powered by pgvector + LangChain LLM.
-        </p>
+        <h1 className="text-xl font-bold text-text-primary sm:text-2xl">{tr.title}</h1>
+        <p className="text-xs text-text-secondary sm:text-sm">{tr.description}</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Upload */}
         <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
-          <h2 className="mb-4 font-mono text-sm text-text-secondary">1. Upload Document</h2>
+          <h2 className="mb-4 font-mono text-sm text-text-secondary">{tr.uploadStep}</h2>
           <div
             onClick={() => fileRef.current?.click()}
             onDragOver={(e) => e.preventDefault()}
@@ -80,13 +81,13 @@ export default function RAGPage() {
           >
             <Upload className="mb-3 h-8 w-8 text-accent-cyan/50" />
             <p className="text-center text-sm text-text-secondary">
-              {file ? file.name : 'Drop a PDF or click to upload'}
+              {file ? file.name : tr.uploadPlaceholder}
             </p>
             {uploadStatus === 'uploading' && (
               <Loader2 className="mt-2 h-4 w-4 animate-spin text-accent-cyan" />
             )}
             {uploadStatus === 'done' && (
-              <span className="mt-2 font-mono text-xs text-accent-cyan">✓ indexed</span>
+              <span className="mt-2 font-mono text-xs text-accent-cyan">{tr.uploadIndexed}</span>
             )}
           </div>
           <input
@@ -103,12 +104,12 @@ export default function RAGPage() {
 
         {/* Query */}
         <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
-          <h2 className="mb-4 font-mono text-sm text-text-secondary">2. Ask a Question</h2>
+          <h2 className="mb-4 font-mono text-sm text-text-secondary">{tr.queryStep}</h2>
           <form onSubmit={handleQuery} className="flex flex-col gap-3">
             <textarea
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="What does the document say about..."
+              placeholder={tr.queryPlaceholder}
               rows={4}
               className="w-full resize-none rounded-lg border border-border bg-surface-2 px-3 py-3 text-base text-text-primary placeholder-text-muted outline-none transition-all focus:border-accent-cyan/50 sm:px-4 sm:text-sm"
             />
@@ -122,7 +123,7 @@ export default function RAGPage() {
               ) : (
                 <Search className="h-4 w-4" />
               )}
-              {isQuerying ? 'Searching...' : 'Query'}
+              {isQuerying ? tr.querying : tr.queryButton}
             </button>
           </form>
         </div>
@@ -133,26 +134,26 @@ export default function RAGPage() {
         <div className="mt-6 space-y-4">
           <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
             <h2 className="mb-3 font-mono text-xs uppercase tracking-widest text-accent-cyan">
-              Answer
+              {tr.answer}
             </h2>
             <p className="text-sm leading-relaxed text-text-primary">{result.answer}</p>
-            <p className="mt-3 font-mono text-xs text-text-muted">model: {result.model}</p>
+            <p className="mt-3 font-mono text-xs text-text-muted">{tr.model}: {result.model}</p>
           </div>
 
           {result.sources.length > 0 && (
             <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
               <h2 className="mb-3 font-mono text-xs uppercase tracking-widest text-accent-cyan">
-                Retrieved Sources
+                {tr.sources}
               </h2>
               <div className="space-y-3">
                 {result.sources.map((src, i) => (
                   <div key={i} className="rounded-md border border-border bg-surface-2 p-4">
                     <div className="mb-1 flex items-center justify-between">
                       <span className="flex items-center gap-1.5 font-mono text-xs text-text-muted">
-                        <FileText className="h-3 w-3" /> chunk {i + 1}
+                        <FileText className="h-3 w-3" /> {tr.chunk} {i + 1}
                       </span>
                       <span className="font-mono text-xs text-accent-cyan">
-                        score: {src.score.toFixed(2)}
+                        {tr.score}: {src.score.toFixed(2)}
                       </span>
                     </div>
                     <p className="text-sm text-text-secondary">{src.content}</p>

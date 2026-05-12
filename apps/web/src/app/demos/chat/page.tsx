@@ -19,6 +19,8 @@ import {
   MAX_THREADS,
 } from '@/lib/thread-store'
 import { getUserId } from '@/lib/user'
+import { useLanguage } from '@/lib/i18n/provider'
+import type { Dictionary } from '@/lib/i18n'
 import { MessageBubble, type ChatMessageView, type ToolCall } from '@/components/chat/message-bubble'
 import { Send, Bot, Plus, Trash2, MessageSquare, Activity, AlertTriangle, Menu, X } from 'lucide-react'
 
@@ -27,16 +29,16 @@ function newThreadId(): string {
   return 'th_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-function relativeTime(iso: string | null): string {
+function relativeTime(iso: string | null, t: Dictionary['chatDemo']): string {
   if (!iso) return ''
   const diff = Date.now() - new Date(iso).getTime()
   const m = Math.floor(diff / 60000)
-  if (m < 1) return 'just now'
-  if (m < 60) return `${m}m ago`
+  if (m < 1) return t.justNow
+  if (m < 60) return t.minutesAgo(m)
   const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
+  if (h < 24) return t.hoursAgo(h)
   const d = Math.floor(h / 24)
-  return `${d}d ago`
+  return t.daysAgo(d)
 }
 
 function hydrateMessages(serialized: SerializedMessage[]): ChatMessageView[] {
@@ -69,6 +71,8 @@ function hydrateMessages(serialized: SerializedMessage[]): ChatMessageView[] {
 }
 
 export default function ChatPage() {
+  const { t } = useLanguage()
+  const tc = t.chatDemo
   const [info, setInfo] = useState<ChatInfo | null>(null)
   const [threadIds, setThreadIds] = useState<string[]>([])
   const [threads, setThreads] = useState<ThreadSummary[]>([])
@@ -199,7 +203,7 @@ export default function ChatPage() {
         const updated = [...prev]
         updated[updated.length - 1] = {
           role: 'assistant',
-          content: 'Error: Could not connect to the API. Is the backend running?',
+          content: tc.connectionError,
         }
         return updated
       })
@@ -227,12 +231,12 @@ export default function ChatPage() {
       >
         <div className="flex items-center justify-between border-b border-border p-3 md:hidden">
           <span className="font-mono text-xs uppercase tracking-widest text-text-muted">
-            threads
+            {tc.threadsHeader}
           </span>
           <button
             onClick={() => setSidebarOpen(false)}
             className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-text-secondary hover:text-accent-green"
-            aria-label="Close sidebar"
+            aria-label={tc.closeSidebarAria}
           >
             <X className="h-4 w-4" />
           </button>
@@ -243,36 +247,36 @@ export default function ChatPage() {
             className="flex w-full items-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-2 font-mono text-xs text-text-primary transition-colors hover:border-accent-green/40 hover:text-accent-green"
           >
             <Plus className="h-3.5 w-3.5" />
-            new chat
+            {tc.newChat}
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {threads.length === 0 ? (
             <p className="px-2 py-4 text-center font-mono text-[11px] text-text-muted">
-              no threads yet
+              {tc.noThreadsYet}
             </p>
           ) : (
-            threads.map((t) => (
+            threads.map((thread) => (
               <button
-                key={t.thread_id}
-                onClick={() => selectThread(t.thread_id)}
+                key={thread.thread_id}
+                onClick={() => selectThread(thread.thread_id)}
                 className={`group mb-1 flex w-full items-start gap-2 rounded-md px-2 py-2 text-left transition-colors ${
-                  t.thread_id === activeThreadId
+                  thread.thread_id === activeThreadId
                     ? 'bg-accent-green/10 text-text-primary'
                     : 'hover:bg-surface-2 text-text-secondary'
                 }`}
               >
                 <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-text-muted" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs">{t.title || 'untitled'}</p>
+                  <p className="truncate text-xs">{thread.title || tc.untitled}</p>
                   <p className="font-mono text-[10px] text-text-muted">
-                    {relativeTime(t.updated_at)}
+                    {relativeTime(thread.updated_at, tc)}
                   </p>
                 </div>
                 <button
-                  onClick={(e) => handleDeleteThread(t.thread_id, e)}
+                  onClick={(e) => handleDeleteThread(thread.thread_id, e)}
                   className="opacity-0 transition-opacity group-hover:opacity-100"
-                  aria-label="Delete thread"
+                  aria-label={tc.deleteThreadAria}
                 >
                   <Trash2 className="h-3 w-3 text-text-muted hover:text-red-400" />
                 </button>
@@ -286,7 +290,7 @@ export default function ChatPage() {
             className="flex items-center gap-2 font-mono text-[11px] text-text-muted transition-colors hover:text-accent-cyan"
           >
             <Activity className="h-3 w-3" />
-            inspect state →
+            {tc.inspectState}
           </Link>
         </div>
       </aside>
@@ -297,36 +301,36 @@ export default function ChatPage() {
           <button
             onClick={() => setSidebarOpen(true)}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-text-secondary transition-colors hover:border-accent-green/50 hover:text-accent-green md:hidden"
-            aria-label="Open threads"
+            aria-label={tc.openThreadsAria}
           >
             <Menu className="h-4 w-4" />
           </button>
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[10px] uppercase tracking-widest text-accent-green sm:text-xs">
-              // ai_chat_playground
+              {tc.label}
             </p>
-            <h1 className="text-lg font-bold text-text-primary sm:text-xl">AI Chat</h1>
+            <h1 className="text-lg font-bold text-text-primary sm:text-xl">{tc.title}</h1>
             <p className="text-[11px] text-text-secondary sm:text-xs">
               {info
-                ? `LangGraph · ${info.provider === 'openai' ? 'OpenAI' : 'Ollama'} ${info.model} · stateful`
-                : 'LangGraph agent · stateful'}
+                ? tc.subtitleProvider(info.provider === 'openai' ? 'OpenAI' : 'Ollama', info.model)
+                : tc.subtitleStateful}
             </p>
             <p className="mt-1 truncate font-mono text-[10px] text-text-muted">
-              thread: {activeThreadId}
+              {tc.thread}: {activeThreadId}
             </p>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto rounded-lg border border-border bg-surface p-3 sm:p-4">
           {loadingThread ? (
-            <p className="text-center font-mono text-xs text-text-muted">loading thread…</p>
+            <p className="text-center font-mono text-xs text-text-muted">{tc.loadingThread}</p>
           ) : messages.length === 0 ? (
             <div className="flex h-full items-center justify-center text-center">
               <div>
                 <Bot className="mx-auto mb-3 h-10 w-10 text-accent-green/30" />
-                <p className="font-mono text-sm text-text-muted">Start a conversation...</p>
+                <p className="font-mono text-sm text-text-muted">{tc.emptyTitle}</p>
                 <p className="mt-1 font-mono text-xs text-text-muted/60">
-                  This conversation persists across reloads in Postgres.
+                  {tc.emptySubtitle}
                 </p>
               </div>
             </div>
@@ -345,7 +349,7 @@ export default function ChatPage() {
         {threadIds.length >= MAX_THREADS && !threadIds.includes(activeThreadId) && (
           <div className="mt-2 flex items-center gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-1.5 font-mono text-[11px] text-yellow-300">
             <AlertTriangle className="h-3 w-3" />
-            max {MAX_THREADS} threads — sending will evict oldest
+            {tc.maxThreadsWarning(MAX_THREADS)}
           </div>
         )}
         <form onSubmit={handleSubmit} className="mt-3 flex gap-2 sm:gap-3">
@@ -353,14 +357,14 @@ export default function ChatPage() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask anything about AI systems..."
+            placeholder={tc.inputPlaceholder}
             disabled={isStreaming}
             className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-3 text-base text-text-primary placeholder-text-muted outline-none transition-all focus:border-accent-green/50 focus:ring-1 focus:ring-accent-green/20 disabled:opacity-50 sm:px-4 sm:text-sm"
           />
           <button
             type="submit"
             disabled={!input.trim() || isStreaming}
-            aria-label="Send"
+            aria-label={tc.sendAria}
             className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-accent-green px-4 py-3 text-sm font-medium text-black transition-all hover:bg-accent-green/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Send className="h-4 w-4" />

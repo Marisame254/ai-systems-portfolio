@@ -1,15 +1,18 @@
+'use client'
+
 import Link from 'next/link'
 import type { LucideIcon } from 'lucide-react'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/lib/i18n/provider'
+import type { DemoId } from '@/lib/demos'
 
 interface DemoCardProps {
-  title: string
-  description: string
+  id: DemoId
   href: string
   icon: LucideIcon
   accentColor: 'green' | 'cyan'
-  badge?: string
+  badge?: 'live' | 'preview'
 }
 
 const colorMap = {
@@ -27,8 +30,11 @@ const colorMap = {
   },
 }
 
-export function DemoCard({ title, description, href, icon: Icon, accentColor, badge }: DemoCardProps) {
+export function DemoCard({ id, href, icon: Icon, accentColor, badge }: DemoCardProps) {
+  const { t } = useLanguage()
   const colors = colorMap[accentColor]
+  const copy = t.demos[id]
+  const badgeLabel = badge === 'live' ? t.demos.badges.live : badge === 'preview' ? t.demos.badges.preview : null
   return (
     <Link
       href={href}
@@ -41,20 +47,20 @@ export function DemoCard({ title, description, href, icon: Icon, accentColor, ba
         <div className={cn('rounded-md p-2', colors.iconBg)}>
           <Icon className="h-5 w-5" />
         </div>
-        {badge && (
+        {badgeLabel && (
           <span
             className={cn(
               'rounded-full px-2 py-0.5 font-mono text-xs',
-              badge === 'Live' ? colors.badgeLive : 'bg-border text-text-muted'
+              badge === 'live' ? colors.badgeLive : 'bg-border text-text-muted'
             )}
           >
-            {badge}
+            {badgeLabel}
           </span>
         )}
       </div>
       <div>
-        <h3 className="mb-2 font-semibold text-text-primary">{title}</h3>
-        <p className="text-sm leading-relaxed text-text-secondary">{description}</p>
+        <h3 className="mb-2 font-semibold text-text-primary">{copy.title}</h3>
+        <p className="text-sm leading-relaxed text-text-secondary">{copy.description}</p>
       </div>
       <div
         className={cn(
@@ -62,7 +68,7 @@ export function DemoCard({ title, description, href, icon: Icon, accentColor, ba
           colors.text
         )}
       >
-        open demo <ArrowRight className="h-3 w-3" />
+        {t.demos.openDemo} <ArrowRight className="h-3 w-3" />
       </div>
     </Link>
   )
