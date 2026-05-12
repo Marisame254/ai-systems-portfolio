@@ -96,13 +96,6 @@ export default function ChatPage() {
     }
   }, [])
 
-  useEffect(() => {
-    const ids = loadThreadIds()
-    setThreadIds(ids)
-    setActiveThreadId(ids[0] ?? newThreadId())
-    refreshThreads(ids)
-  }, [refreshThreads])
-
   const selectThread = useCallback(async (threadId: string) => {
     setActiveThreadId(threadId)
     setSidebarOpen(false)
@@ -117,6 +110,17 @@ export default function ChatPage() {
       setLoadingThread(false)
     }
   }, [])
+
+  useEffect(() => {
+    const ids = loadThreadIds()
+    setThreadIds(ids)
+    if (ids[0]) {
+      selectThread(ids[0])
+    } else {
+      setActiveThreadId(newThreadId())
+    }
+    refreshThreads(ids)
+  }, [refreshThreads, selectThread])
 
   const startNewChat = useCallback(() => {
     setActiveThreadId(newThreadId())
