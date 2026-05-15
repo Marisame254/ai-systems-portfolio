@@ -23,6 +23,7 @@ import {
   X,
   Hammer,
   Bot,
+  Brain,
   Flag,
   FlagOff,
   ChevronDown,
@@ -33,6 +34,7 @@ const TYPE_COLOR: Record<string, string> = {
   end: '#00ff88',
   llm: '#00d4ff',
   tool: '#a855f7',
+  memory: '#f59e0b',
 }
 
 const nodeStyle = (color: string, selected: boolean) => ({
@@ -105,6 +107,7 @@ function NodeIcon({ type }: { type: string }) {
   if (type === 'llm') return <Bot className="h-4 w-4 text-accent-cyan" />
   if (type === 'start') return <Flag className="h-4 w-4 text-accent-green" />
   if (type === 'end') return <FlagOff className="h-4 w-4 text-accent-green" />
+  if (type === 'memory') return <Brain className="h-4 w-4 text-amber-400" />
   return null
 }
 
@@ -213,6 +216,38 @@ function NodeDetailPanel({
             {meta.description ?? ta.panel.builtIn}
           </p>
         )}
+
+        {node.type === 'memory' && (
+          <div className="space-y-3">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
+                {ta.panel.role}
+              </p>
+              <p className="mt-1 font-mono text-amber-400">
+                {node.id === 'load_memory' ? ta.panel.memoryLoad : ta.panel.memorySave}
+              </p>
+            </div>
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
+                {ta.panel.behavior}
+              </p>
+              <p className="mt-1 leading-relaxed text-text-secondary">
+                {meta.description ?? ta.panel.builtIn}
+              </p>
+            </div>
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
+                {ta.panel.storage}
+              </p>
+              <p className="mt-1 font-mono text-text-primary">
+                AsyncPostgresStore · namespace=(&apos;memories&apos;, user_id)
+              </p>
+            </div>
+            <p className="border-t border-border pt-3 leading-relaxed text-text-muted">
+              {ta.panel.memoryDescription}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -288,6 +323,9 @@ export default function AgentsPage() {
         </span>
         <span>
           <span className="text-accent-purple">■</span> {ta.legend.tools}
+        </span>
+        <span>
+          <span className="text-amber-400">■</span> {ta.legend.memory}
         </span>
         <span>
           <span className="text-accent-cyan">⇢</span> {ta.legend.conditional}

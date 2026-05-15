@@ -222,6 +222,7 @@ export const es: Dictionary = {
       startEnd: 'inicio / fin',
       llm: 'agente (llm)',
       tools: 'herramientas',
+      memory: 'memoria',
       conditional: 'arista condicional',
     },
     errorTitle: 'No se pudo cargar el grafo del agente.',
@@ -242,6 +243,13 @@ export const es: Dictionary = {
       toolDescription:
         'ToolNode ejecuta la herramienta que pidió el LLM y anexa el resultado a state.messages, luego vuelve a agent.',
       builtIn: 'Nodo built-in de LangGraph.',
+      role: 'rol',
+      behavior: 'comportamiento',
+      storage: 'almacenamiento',
+      memoryLoad: 'load_memory · pre-agente',
+      memorySave: 'save_memory · post-agente',
+      memoryDescription:
+        'Los nodos de memoria de largo plazo envuelven al agente. load_memory levanta hechos cross-thread del usuario actual y los inyecta como mensaje de sistema; save_memory extrae nuevos hechos durables del último intercambio y los persiste. Ambos no hacen nada si no hay user_id configurado.',
     },
     footer:
       'Cliqueá cualquier nodo para inspeccionarlo: ver el modelo y el system prompt de agent, las herramientas asociadas y sus descripciones para tools, o el rol de __start__ / __end__ en el runtime de LangGraph.',

@@ -216,6 +216,7 @@ export const en = {
       startEnd: 'start / end',
       llm: 'agent (llm)',
       tools: 'tools',
+      memory: 'memory',
       conditional: 'conditional edge',
     },
     errorTitle: 'Could not load agent graph.',
@@ -236,6 +237,13 @@ export const en = {
       toolDescription:
         'ToolNode executes whichever tool the LLM requested and appends the result to state.messages, then loops back to agent.',
       builtIn: 'Built-in LangGraph node.',
+      role: 'role',
+      behavior: 'behavior',
+      storage: 'storage',
+      memoryLoad: 'load_memory · pre-agent',
+      memorySave: 'save_memory · post-agent',
+      memoryDescription:
+        'Long-term memory nodes wrap the agent step. load_memory reads cross-thread facts for the current user and injects them as a system message; save_memory extracts new durable facts from the latest exchange and persists them. Both no-op when no user_id is configured.',
     },
     footer:
       'Click any node to inspect it: see the model and system prompt for agent, the bound tools and their descriptions for tools, or the role of __start__ / __end__ in the LangGraph runtime.',
