@@ -27,7 +27,7 @@ def _classify(node_id: str) -> str:
     return _SPECIAL_NODES.get(node_id, "llm")
 
 
-def _node_meta(node_id: str) -> dict[str, Any]:
+def _node_meta(node_id: str, request: Request | None = None) -> dict[str, Any]:
     if node_id == "__start__":
         return {
             "description": (
@@ -36,14 +36,13 @@ def _node_meta(node_id: str) -> dict[str, Any]:
             )
         }
     if node_id == "__end__":
-        return {
-            "description": "Graph terminal node. Returns the final messages list to the caller."
-        }
+        return {"description": "Graph terminal node. Returns the final messages list to the caller."}
     if node_id == "tools":
+        rag_service = getattr(request.app.state, "rag_service", None) if request else None
         return {
             "tools": [
                 {"name": t.name, "description": (t.description or "").strip()}
-                for t in build_tools()
+                for t in build_tools(rag_service=rag_service)
             ]
         }
     if node_id == "agent":
@@ -72,7 +71,7 @@ def _node_meta(node_id: str) -> dict[str, Any]:
 
 
 @router.get("/graph")
-async def get_graph(agent: CompiledStateGraph = Depends(get_chat_agent)):
+async def get_graph(request: Request, agent: CompiledStateGraph = Depends(get_chat_agent)):
     graph = agent.get_graph()
 
     nodes = [
@@ -80,7 +79,7 @@ async def get_graph(agent: CompiledStateGraph = Depends(get_chat_agent)):
             "id": node_id,
             "label": node_id,
             "type": _classify(node_id),
-            "meta": _node_meta(node_id),
+            "meta": _node_meta(node_id, request),
         }
         for node_id in graph.nodes
     ]

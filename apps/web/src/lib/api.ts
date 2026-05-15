@@ -56,22 +56,105 @@ export async function* streamChat(
   }
 }
 
-export async function queryRAG(query: string, sessionId?: string) {
-  const res = await fetch(`${API_BASE}/api/rag/query`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, session_id: sessionId }),
-  })
+// === RAG ===
+
+export interface RAGInfo {
+  provider: 'ollama' | 'openai'
+  embedding_model: string
+  dim: number
+  max_docs_per_user: number
+  max_upload_bytes: number
+  supported_types: string[]
+}
+
+export interface DocumentInfo {
+  id: string
+  filename: string
+  content_type: string
+  byte_size: number
+  chunks_count: number
+  created_at: string
+}
+
+export interface DocumentListResponse {
+  documents: DocumentInfo[]
+  count: number
+  max: number
+}
+
+export interface RAGSource {
+  content: string
+  score: number
+  filename: string
+  page: number | null
+  chunk_index: number
+  document_id: string
+}
+
+export interface RAGQueryResponse {
+  answer: string
+  sources: RAGSource[]
+  model: string
+}
+
+async function parseError(res: Response): Promise<string> {
+  try {
+    const data = await res.json()
+    if (typeof data?.detail === 'string') return data.detail
+  } catch {
+    /* ignore */
+  }
+  return `API error: ${res.status}`
+}
+
+export async function getRAGInfo(): Promise<RAGInfo> {
+  const res = await fetch(`${API_BASE}/api/rag/info`)
+  if (!res.ok) throw new Error(await parseError(res))
   return res.json()
 }
 
-export async function uploadDocument(file: File) {
+export async function listDocuments(userId: string): Promise<DocumentListResponse> {
+  const res = await fetch(`${API_BASE}/api/rag/documents?user_id=${encodeURIComponent(userId)}`)
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json()
+}
+
+export async function uploadDocument(file: File, userId: string): Promise<DocumentInfo> {
   const formData = new FormData()
   formData.append('file', file)
+  formData.append('user_id', userId)
   const res = await fetch(`${API_BASE}/api/rag/upload`, {
     method: 'POST',
     body: formData,
   })
+  if (!res.ok) throw new Error(await parseError(res))
+  return res.json()
+}
+
+export async function deleteDocument(userId: string, docId: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE}/api/rag/documents/${encodeURIComponent(docId)}?user_id=${encodeURIComponent(userId)}`,
+    { method: 'DELETE' },
+  )
+  if (!res.ok) throw new Error(await parseError(res))
+}
+
+export async function queryRAG(
+  query: string,
+  userId: string,
+  opts?: { filename?: string; topK?: number },
+): Promise<RAGQueryResponse> {
+  const res = await fetch(`${API_BASE}/api/rag/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query,
+      user_id: userId,
+      filename: opts?.filename ?? null,
+      top_k: opts?.topK ?? 4,
+    }),
+  })
+  if (!res.ok) throw new Error(await parseError(res))
   return res.json()
 }
 

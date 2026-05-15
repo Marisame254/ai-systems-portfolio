@@ -10,7 +10,8 @@ from agents.chat_agent import build_chat_graph
 from agents.tools import build_tools
 from api.routes import agents, chat, memory, rag
 from core.config import settings
-from core.dependencies import get_chat_model
+from core.dependencies import get_chat_model, get_embeddings
+from services.rag import init_rag_service
 from services.threads import ensure_schema
 
 
@@ -34,11 +35,14 @@ async def lifespan(app: FastAPI):
 
     await ensure_schema(pool)
 
+    rag_service = await init_rag_service(pool, get_embeddings())
+
     app.state.checkpoint_pool = pool
     app.state.memory_store = store
+    app.state.rag_service = rag_service
     app.state.chat_agent = build_chat_graph(
         get_chat_model(),
-        build_tools(),
+        build_tools(rag_service=rag_service),
         checkpointer=saver,
         store=store,
     )
