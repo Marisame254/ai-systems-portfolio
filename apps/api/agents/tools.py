@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 
 from langchain_core.runnables import RunnableConfig
@@ -5,6 +6,8 @@ from langchain_core.tools import BaseTool, tool
 
 from core.config import settings
 from services.rag import RAGService
+
+logger = logging.getLogger(__name__)
 
 
 @tool
@@ -20,7 +23,7 @@ def _make_rag_tool(rag_service: RAGService) -> BaseTool:
     async def search_user_documents(
         query: str,
         filename: str | None = None,
-        config: RunnableConfig | None = None,
+        config: RunnableConfig = None,  # type: ignore[assignment]  # auto-injected by LangChain
     ) -> str:
         """Search the current user's uploaded documents (PDF, TXT, MD) with semantic search.
 
@@ -38,6 +41,18 @@ def _make_rag_tool(rag_service: RAGService) -> BaseTool:
         if config is not None:
             user_id = (config.get("configurable") or {}).get("user_id")
         if not user_id:
+            cfg_keys = list(config.keys()) if config is not None else None
+            conf_keys = (
+                list((config.get("configurable") or {}).keys())
+                if config is not None
+                else None
+            )
+            logger.warning(
+                "search_user_documents: missing user_id "
+                "(config_keys=%s configurable_keys=%s)",
+                cfg_keys,
+                conf_keys,
+            )
             return "Error: no user_id in context; RAG search unavailable."
 
         hits = await rag_service.search(

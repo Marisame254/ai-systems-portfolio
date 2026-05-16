@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -10,6 +11,8 @@ from core.config import settings
 from core.dependencies import get_chat_agent
 from schemas.models import ChatRequest
 from services.threads import upsert_thread
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -43,6 +46,14 @@ async def generate_stream(
         "configurable": configurable,
         "recursion_limit": settings.agent_max_iterations * 2 + 2,
     }
+
+    logger.info(
+        "chat.stream start thread=%s configurable_keys=%s has_user_id=%s has_checkpoint=%s",
+        request.thread_id,
+        list(configurable.keys()),
+        bool(request.user_id),
+        bool(request.checkpoint_id),
+    )
 
     # Decide whether this is a new thread or a continuation.
     # When forking from a checkpoint the SystemMessage is already in that snapshot,
