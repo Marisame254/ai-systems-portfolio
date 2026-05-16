@@ -13,7 +13,7 @@ export interface Demo {
 
 export const demos: Demo[] = [
   { id: 'chat', href: '/demos/chat', icon: Bot, accentColor: 'green', badge: 'live' },
-  { id: 'rag', href: '/demos/rag', icon: Database, accentColor: 'cyan', badge: 'preview' },
+  { id: 'rag', href: '/demos/rag', icon: Database, accentColor: 'cyan', badge: 'live' },
   { id: 'agents', href: '/demos/agents', icon: GitBranch, accentColor: 'green', badge: 'live' },
   { id: 'memory', href: '/demos/memory', icon: Brain, accentColor: 'cyan', badge: 'live' },
 ]
