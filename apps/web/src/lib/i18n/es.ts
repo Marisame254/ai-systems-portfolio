@@ -211,6 +211,9 @@ export const es: Dictionary = {
     minutesAgo: (n: number) => `hace ${n}m`,
     hoursAgo: (n: number) => `hace ${n}h`,
     daysAgo: (n: number) => `hace ${n}d`,
+    branchBanner: 'Tu próximo mensaje creará una nueva rama desde este checkpoint.',
+    branchCancel: 'cancelar',
+    branchLoadFailed: 'No se pudo cargar ese checkpoint.',
   },
   agentsDemo: {
     label: '// visualización_agente',
@@ -339,5 +342,8 @@ export const es: Dictionary = {
     noCheckpoints: 'aún no hay checkpoints',
     msgs: 'msgs',
     next: 'siguiente',
+    rewindHere: 'continuar desde aquí',
+    rewindAria: 'Continuar el chat desde este checkpoint',
+    rewindDisabled: 'sin checkpoint id',
   },
 }

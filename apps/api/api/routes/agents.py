@@ -147,3 +147,16 @@ async def thread_history(
     async for snap in agent.aget_state_history(config):
         snapshots.append(serialize_state(snap))
     return {"thread_id": thread_id, "checkpoints": snapshots}
+
+
+@router.get("/state/{thread_id}/checkpoint/{checkpoint_id}")
+async def thread_state_at_checkpoint(
+    thread_id: str,
+    checkpoint_id: str,
+    agent: CompiledStateGraph = Depends(get_chat_agent),
+):
+    config = {"configurable": {"thread_id": thread_id, "checkpoint_id": checkpoint_id}}
+    state = await agent.aget_state(config)
+    if not state.values:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
+    return {"thread_id": thread_id, **serialize_state(state)}

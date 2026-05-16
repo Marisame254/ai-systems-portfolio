@@ -12,6 +12,7 @@ class ChatRequest(BaseModel):
     message: str
     thread_id: str
     user_id: str | None = None
+    checkpoint_id: str | None = None
     history: list[ChatMessage] = []  # legacy, ignored when checkpointer is active
 
 

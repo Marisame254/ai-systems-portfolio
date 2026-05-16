@@ -1,13 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   streamChat,
   getChatInfo,
   listThreadsByIds,
   deleteThread,
   getThreadState,
+  getThreadStateAtCheckpoint,
   type ChatInfo,
   type ThreadSummary,
   type SerializedMessage,
@@ -22,7 +24,18 @@ import { getUserId } from '@/lib/user'
 import { useLanguage } from '@/lib/i18n/provider'
 import type { Dictionary } from '@/lib/i18n'
 import { MessageBubble, type ChatMessageView, type ToolCall } from '@/components/chat/message-bubble'
-import { Send, Bot, Plus, Trash2, MessageSquare, Activity, AlertTriangle, Menu, X } from 'lucide-react'
+import {
+  Send,
+  Bot,
+  Plus,
+  Trash2,
+  MessageSquare,
+  Activity,
+  AlertTriangle,
+  Menu,
+  X,
+  GitBranch,
+} from 'lucide-react'
 
 function newThreadId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
@@ -70,9 +83,14 @@ function hydrateMessages(serialized: SerializedMessage[]): ChatMessageView[] {
   return result
 }
 
-export default function ChatPage() {
+function ChatPageInner() {
   const { t } = useLanguage()
   const tc = t.chatDemo
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const queryThread = searchParams.get('thread')
+  const queryCheckpoint = searchParams.get('checkpoint')
+
   const [info, setInfo] = useState<ChatInfo | null>(null)
   const [threadIds, setThreadIds] = useState<string[]>([])
   const [threads, setThreads] = useState<ThreadSummary[]>([])
@@ -82,6 +100,8 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [loadingThread, setLoadingThread] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [pendingCheckpointId, setPendingCheckpointId] = useState<string | null>(null)
+  const [branchError, setBranchError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -105,6 +125,8 @@ export default function ChatPage() {
     setSidebarOpen(false)
     setLoadingThread(true)
     setMessages([])
+    setPendingCheckpointId(null)
+    setBranchError(null)
     try {
       const state = await getThreadState(threadId)
       setMessages(hydrateMessages(state.values.messages))
@@ -115,22 +137,76 @@ export default function ChatPage() {
     }
   }, [])
 
+  const enterFork = useCallback(async (threadId: string, checkpointId: string) => {
+    setActiveThreadId(threadId)
+    setSidebarOpen(false)
+    setLoadingThread(true)
+    setMessages([])
+    setBranchError(null)
+    setPendingCheckpointId(checkpointId)
+    try {
+      const state = await getThreadStateAtCheckpoint(threadId, checkpointId)
+      setMessages(hydrateMessages(state.values.messages))
+    } catch {
+      setPendingCheckpointId(null)
+      setBranchError(tc.branchLoadFailed)
+      // fall back to head state
+      try {
+        const state = await getThreadState(threadId)
+        setMessages(hydrateMessages(state.values.messages))
+      } catch {
+        setMessages([])
+      }
+    } finally {
+      setLoadingThread(false)
+    }
+  }, [tc.branchLoadFailed])
+
   useEffect(() => {
     const ids = loadThreadIds()
     setThreadIds(ids)
-    if (ids[0]) {
+    refreshThreads(ids)
+
+    // Query params take precedence over the most-recent thread
+    if (queryThread && queryCheckpoint) {
+      enterFork(queryThread, queryCheckpoint)
+    } else if (queryThread) {
+      selectThread(queryThread)
+    } else if (ids[0]) {
       selectThread(ids[0])
     } else {
       setActiveThreadId(newThreadId())
     }
-    refreshThreads(ids)
-  }, [refreshThreads, selectThread])
+
+    if (queryThread || queryCheckpoint) {
+      router.replace('/demos/chat')
+    }
+    // intentionally run once on mount — query params are read from initial URL
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const startNewChat = useCallback(() => {
     setActiveThreadId(newThreadId())
     setMessages([])
     setSidebarOpen(false)
+    setPendingCheckpointId(null)
+    setBranchError(null)
   }, [])
+
+  const cancelBranch = useCallback(async () => {
+    if (!activeThreadId) return
+    setPendingCheckpointId(null)
+    setBranchError(null)
+    setLoadingThread(true)
+    try {
+      const state = await getThreadState(activeThreadId)
+      setMessages(hydrateMessages(state.values.messages))
+    } catch {
+      setMessages([])
+    } finally {
+      setLoadingThread(false)
+    }
+  }, [activeThreadId])
 
   const handleDeleteThread = useCallback(
     async (threadId: string, e: React.MouseEvent) => {
@@ -160,8 +236,15 @@ export default function ChatPage() {
     setInput('')
     setIsStreaming(true)
 
+    const checkpointForThisTurn = pendingCheckpointId
+
     try {
-      for await (const event of streamChat(messageText, activeThreadId, getUserId())) {
+      for await (const event of streamChat(
+        messageText,
+        activeThreadId,
+        getUserId(),
+        checkpointForThisTurn ? { checkpointId: checkpointForThisTurn } : undefined,
+      )) {
         setMessages((prev) => {
           const updated = [...prev]
           const last = { ...updated[updated.length - 1] }
@@ -183,6 +266,8 @@ export default function ChatPage() {
           return updated
         })
       }
+      // After a successful turn, we're at the head of whatever branch we forked into.
+      if (checkpointForThisTurn) setPendingCheckpointId(null)
       const wasRegistered = loadThreadIds().includes(activeThreadId)
       if (!wasRegistered) {
         const { ids, evicted } = addThreadId(activeThreadId)
@@ -352,6 +437,27 @@ export default function ChatPage() {
             {tc.maxThreadsWarning(MAX_THREADS)}
           </div>
         )}
+
+        {pendingCheckpointId && (
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-accent-cyan/30 bg-accent-cyan/5 px-3 py-1.5 font-mono text-[11px] text-accent-cyan">
+            <GitBranch className="h-3 w-3 shrink-0" />
+            <span className="flex-1">{tc.branchBanner}</span>
+            <button
+              onClick={cancelBranch}
+              className="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-text-muted transition-colors hover:bg-surface hover:text-text-primary"
+            >
+              {tc.branchCancel}
+            </button>
+          </div>
+        )}
+
+        {branchError && !pendingCheckpointId && (
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-1.5 font-mono text-[11px] text-red-400">
+            <AlertTriangle className="h-3 w-3" />
+            {branchError}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="mt-3 flex gap-2 sm:gap-3">
           <input
             type="text"
@@ -372,5 +478,13 @@ export default function ChatPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<div className="p-6 font-mono text-xs text-text-muted">loading…</div>}>
+      <ChatPageInner />
+    </Suspense>
   )
 }

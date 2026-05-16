@@ -13,7 +13,7 @@ import {
 } from '@/lib/api'
 import { loadThreadIds } from '@/lib/thread-store'
 import { MessageBubble, type ChatMessageView, type ToolCall } from '@/components/chat/message-bubble'
-import { AlertCircle, Clock, Layers, Loader2 } from 'lucide-react'
+import { AlertCircle, Clock, Layers, Loader2, RotateCcw } from 'lucide-react'
 import { useLanguage } from '@/lib/i18n/provider'
 import type { Dictionary } from '@/lib/i18n'
 
@@ -153,7 +153,7 @@ function StatePageInner() {
       ) : tab === 'state' ? (
         <StateView state={state} ts={ts} />
       ) : (
-        <HistoryView history={history} ts={ts} />
+        <HistoryView history={history} ts={ts} threadId={activeThread} router={router} />
       )}
     </div>
   )
@@ -212,9 +212,13 @@ function StateView({
 function HistoryView({
   history,
   ts,
+  threadId,
+  router,
 }: {
   history: ThreadHistory | null
   ts: Dictionary['stateDemo']
+  threadId: string
+  router: ReturnType<typeof useRouter>
 }) {
   if (!history) return <p className="font-mono text-xs text-text-muted">{ts.empty}</p>
   if (history.checkpoints.length === 0)
@@ -228,6 +232,8 @@ function HistoryView({
           cp={cp}
           index={history.checkpoints.length - i}
           ts={ts}
+          threadId={threadId}
+          router={router}
         />
       ))}
     </div>
@@ -238,27 +244,56 @@ function CheckpointCard({
   cp,
   index,
   ts,
+  threadId,
+  router,
 }: {
   cp: Omit<ThreadState, 'thread_id'>
   index: number
   ts: Dictionary['stateDemo']
+  threadId: string
+  router: ReturnType<typeof useRouter>
 }) {
   const [open, setOpen] = useState(false)
   const messages = hydrate(cp.values.messages)
+  const canRewind = !!cp.checkpoint_id && cp.values.messages.length > 0
+
+  function handleRewind(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!canRewind) return
+    router.push(
+      `/demos/chat?thread=${encodeURIComponent(threadId)}&checkpoint=${encodeURIComponent(
+        cp.checkpoint_id as string,
+      )}`,
+    )
+  }
+
   return (
     <div className="rounded-lg border border-border bg-surface">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-3 px-4 py-2 text-left font-mono text-xs hover:bg-surface-2"
-      >
-        <span className="rounded bg-accent-cyan/10 px-2 py-0.5 text-accent-cyan">
-          #{index}
-        </span>
-        <span className="text-text-secondary">
-          {cp.values.messages.length} {ts.msgs} · {ts.next}: {cp.next.length ? cp.next.join(',') : '∅'}
-        </span>
-        <span className="ml-auto text-[10px] text-text-muted">{cp.created_at ?? ''}</span>
-      </button>
+      <div className="flex w-full items-center gap-3 px-4 py-2 font-mono text-xs">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex flex-1 items-center gap-3 text-left hover:text-text-primary"
+        >
+          <span className="rounded bg-accent-cyan/10 px-2 py-0.5 text-accent-cyan">
+            #{index}
+          </span>
+          <span className="text-text-secondary">
+            {cp.values.messages.length} {ts.msgs} · {ts.next}:{' '}
+            {cp.next.length ? cp.next.join(',') : '∅'}
+          </span>
+          <span className="ml-auto text-[10px] text-text-muted">{cp.created_at ?? ''}</span>
+        </button>
+        <button
+          onClick={handleRewind}
+          disabled={!canRewind}
+          aria-label={ts.rewindAria}
+          title={canRewind ? ts.rewindAria : ts.rewindDisabled}
+          className="ml-2 flex shrink-0 items-center gap-1 rounded-md border border-accent-green/30 bg-accent-green/5 px-2 py-1 font-mono text-[11px] text-accent-green transition-colors hover:bg-accent-green/15 disabled:cursor-not-allowed disabled:border-border disabled:bg-transparent disabled:text-text-muted/40"
+        >
+          <RotateCcw className="h-3 w-3" />
+          <span className="hidden sm:inline">{ts.rewindHere}</span>
+        </button>
+      </div>
       {open && (
         <div className="border-t border-border p-3">
           {messages.length === 0 ? (

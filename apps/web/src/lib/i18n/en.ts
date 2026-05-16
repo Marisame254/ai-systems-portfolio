@@ -205,6 +205,9 @@ export const en = {
     minutesAgo: (n: number) => `${n}m ago`,
     hoursAgo: (n: number) => `${n}h ago`,
     daysAgo: (n: number) => `${n}d ago`,
+    branchBanner: 'Your next message will branch from this checkpoint.',
+    branchCancel: 'cancel',
+    branchLoadFailed: 'Could not load that checkpoint.',
   },
   agentsDemo: {
     label: '// agent_visualization',
@@ -332,6 +335,9 @@ export const en = {
     noCheckpoints: 'no checkpoints yet',
     msgs: 'msgs',
     next: 'next',
+    rewindHere: 'continue from here',
+    rewindAria: 'Continue chat from this checkpoint',
+    rewindDisabled: 'no checkpoint id',
   },
 }
 

@@ -20,12 +20,20 @@ export type ChatStreamEvent =
 export async function* streamChat(
   message: string,
   threadId: string,
-  userId?: string
+  userId?: string,
+  opts?: { checkpointId?: string }
 ): AsyncGenerator<ChatStreamEvent> {
+  const body: Record<string, unknown> = {
+    message,
+    thread_id: threadId,
+    user_id: userId,
+  }
+  if (opts?.checkpointId) body.checkpoint_id = opts.checkpointId
+
   const res = await fetch(`${API_BASE}/api/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, thread_id: threadId, user_id: userId }),
+    body: JSON.stringify(body),
   })
 
   if (!res.ok) throw new Error(`API error: ${res.status}`)
@@ -256,6 +264,17 @@ export async function getThreadState(threadId: string): Promise<ThreadState> {
 
 export async function getThreadHistory(threadId: string): Promise<ThreadHistory> {
   const res = await fetch(`${API_BASE}/api/agents/state/${threadId}/history`)
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  return res.json()
+}
+
+export async function getThreadStateAtCheckpoint(
+  threadId: string,
+  checkpointId: string,
+): Promise<ThreadState> {
+  const res = await fetch(
+    `${API_BASE}/api/agents/state/${threadId}/checkpoint/${checkpointId}`,
+  )
   if (!res.ok) throw new Error(`API error: ${res.status}`)
   return res.json()
 }

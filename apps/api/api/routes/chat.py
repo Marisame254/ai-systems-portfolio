@@ -37,14 +37,20 @@ async def generate_stream(
     configurable: dict = {"thread_id": request.thread_id}
     if request.user_id:
         configurable["user_id"] = request.user_id
+    if request.checkpoint_id:
+        configurable["checkpoint_id"] = request.checkpoint_id
     config = {
         "configurable": configurable,
         "recursion_limit": settings.agent_max_iterations * 2 + 2,
     }
 
-    # Decide whether this is a new thread (no prior state) or a continuation.
+    # Decide whether this is a new thread or a continuation.
+    # When forking from a checkpoint the SystemMessage is already in that snapshot,
+    # so we always treat it as a continuation.
     state = await agent.aget_state(config)
-    is_new = not (state.values and state.values.get("messages"))
+    is_new = not request.checkpoint_id and not (
+        state.values and state.values.get("messages")
+    )
 
     if is_new:
         new_messages = [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=request.message)]
