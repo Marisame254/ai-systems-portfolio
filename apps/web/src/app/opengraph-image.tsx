@@ -55,6 +55,24 @@ export default function Image() {
         >
           LangGraph · RAG · Multi-agent
         </div>
+        <div
+          style={{
+            marginTop: 56,
+            display: 'flex',
+            alignItems: 'center',
+            alignSelf: 'flex-start',
+            gap: 14,
+            padding: '20px 40px',
+            borderRadius: 9999,
+            fontSize: 32,
+            fontWeight: 700,
+            color: '#0a0a0a',
+            backgroundImage: 'linear-gradient(90deg, #00ff88, #00d5ff)',
+          }}
+        >
+          Explore live demos
+          <span style={{ fontSize: 36 }}>→</span>
+        </div>
       </div>
     ),
     { ...size },
