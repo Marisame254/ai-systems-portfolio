@@ -138,11 +138,6 @@ export const es: Dictionary = {
       },
     },
     projects: {
-      portfolio: {
-        name: 'AI Systems Portfolio',
-        description:
-          'Este monorepo — Next.js 14 + FastAPI + LangGraph + pgvector. Demos en vivo de chat por streaming, RAG y visualización de agentes. LLM agnóstico al proveedor (Ollama en dev, OpenAI en prod).',
-      },
       lyra: {
         name: 'Lyra',
         description:

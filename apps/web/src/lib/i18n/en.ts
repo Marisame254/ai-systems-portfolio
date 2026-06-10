@@ -133,11 +133,6 @@ export const en = {
       },
     },
     projects: {
-      portfolio: {
-        name: 'AI Systems Portfolio',
-        description:
-          'This monorepo — Next.js 14 + FastAPI + LangGraph + pgvector. Live demos for streaming chat, RAG, and agent visualization. Provider-agnostic LLM (Ollama in dev, OpenAI in prod).',
-      },
       lyra: {
         name: 'Lyra',
         description:

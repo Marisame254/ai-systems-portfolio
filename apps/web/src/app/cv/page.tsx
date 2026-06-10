@@ -46,11 +46,6 @@ const skillItems: Record<string, string[]> = {
 
 const projectMeta = [
   {
-    key: 'portfolio',
-    tech: ['Next.js', 'FastAPI', 'LangGraph', 'pgvector', 'Turborepo'],
-    href: 'https://github.com/marisame254/ai-systems-portfolio',
-  },
-  {
     key: 'lyra',
     tech: ['Python', 'DeepAgents', 'MCP', 'Ollama', 'PostgreSQL'],
   },
@@ -104,7 +99,8 @@ export default function CVPage() {
 
   const projects = projectMeta.map((p) => {
     const dict = cv.projects[p.key]
-    return { name: dict.name, description: dict.description, tech: p.tech, href: 'href' in p ? p.href : undefined }
+    const href = 'href' in p ? (p.href as string) : undefined
+    return { name: dict.name, description: dict.description, tech: p.tech, href }
   })
 
   const education = [
