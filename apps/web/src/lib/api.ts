@@ -16,12 +16,13 @@ export type ChatStreamEvent =
   | { type: 'token'; text: string }
   | { type: 'tool_call'; name: string; args: unknown }
   | { type: 'tool_result'; name: string; result: string }
+  | { type: 'error'; message: string }
 
 export async function* streamChat(
   message: string,
   threadId: string,
   userId?: string,
-  opts?: { checkpointId?: string }
+  opts?: { checkpointId?: string; signal?: AbortSignal }
 ): AsyncGenerator<ChatStreamEvent> {
   const body: Record<string, unknown> = {
     message,
@@ -34,6 +35,7 @@ export async function* streamChat(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal: opts?.signal,
   })
 
   if (!res.ok) throw new Error(`API error: ${res.status}`)
@@ -43,24 +45,29 @@ export async function* streamChat(
   const decoder = new TextDecoder()
   let buffer = ''
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
 
-    let idx
-    while ((idx = buffer.indexOf('\n\n')) !== -1) {
-      const frame = buffer.slice(0, idx)
-      buffer = buffer.slice(idx + 2)
-      if (!frame.startsWith('data: ')) continue
-      const data = frame.slice(6)
-      if (data === '[DONE]') return
-      try {
-        yield JSON.parse(data) as ChatStreamEvent
-      } catch {
-        // ignore malformed frames
+      let idx
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const frame = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 2)
+        if (!frame.startsWith('data: ')) continue
+        const data = frame.slice(6)
+        if (data === '[DONE]') return
+        try {
+          yield JSON.parse(data) as ChatStreamEvent
+        } catch {
+          // ignore malformed frames
+        }
       }
     }
+  } finally {
+    // Releases the stream when the consumer breaks early (unmount, new send, abort).
+    reader.cancel().catch(() => {})
   }
 }
 

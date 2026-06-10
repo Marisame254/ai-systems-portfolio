@@ -68,8 +68,11 @@ export default function MemoryPage() {
   }
 
   async function handleRemove(key: string) {
-    const prev = memories
-    setMemories((cur) => cur.filter((m) => m.key !== key))
+    let prev: MemoryEntry[] = []
+    setMemories((cur) => {
+      prev = cur
+      return cur.filter((m) => m.key !== key)
+    })
     try {
       await apiDeleteMemory(userId, key)
     } catch {

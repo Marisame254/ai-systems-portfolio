@@ -70,45 +70,52 @@ async def generate_stream(
         new_messages = [HumanMessage(content=request.message)]
         title = None
 
-    async for event in agent.astream_events(
-        {"messages": new_messages},
-        config=config,
-        version="v2",
-    ):
-        kind = event["event"]
+    try:
+        async for event in agent.astream_events(
+            {"messages": new_messages},
+            config=config,
+            version="v2",
+        ):
+            kind = event["event"]
 
-        if kind == "on_chat_model_stream":
-            if "memory_extraction" in (event.get("tags") or []):
-                continue
-            chunk = event["data"].get("chunk")
-            text = getattr(chunk, "content", "") if chunk else ""
-            if text:
-                yield _sse({"type": "token", "text": text})
+            if kind == "on_chat_model_stream":
+                if "memory_extraction" in (event.get("tags") or []):
+                    continue
+                chunk = event["data"].get("chunk")
+                text = getattr(chunk, "content", "") if chunk else ""
+                if text:
+                    yield _sse({"type": "token", "text": text})
 
-        elif kind == "on_tool_start":
-            yield _sse(
-                {
-                    "type": "tool_call",
-                    "name": event.get("name", ""),
-                    "args": event["data"].get("input", {}),
-                }
-            )
+            elif kind == "on_tool_start":
+                yield _sse(
+                    {
+                        "type": "tool_call",
+                        "name": event.get("name", ""),
+                        "args": event["data"].get("input", {}),
+                    }
+                )
 
-        elif kind == "on_tool_end":
-            output = event["data"].get("output")
-            result_str = str(output) if output is not None else ""
-            if len(result_str) > TOOL_RESULT_PREVIEW_CHARS:
-                result_str = result_str[:TOOL_RESULT_PREVIEW_CHARS] + "..."
-            yield _sse(
-                {
-                    "type": "tool_result",
-                    "name": event.get("name", ""),
-                    "result": result_str,
-                }
-            )
+            elif kind == "on_tool_end":
+                output = event["data"].get("output")
+                result_str = str(output) if output is not None else ""
+                if len(result_str) > TOOL_RESULT_PREVIEW_CHARS:
+                    result_str = result_str[:TOOL_RESULT_PREVIEW_CHARS] + "..."
+                yield _sse(
+                    {
+                        "type": "tool_result",
+                        "name": event.get("name", ""),
+                        "result": result_str,
+                    }
+                )
 
-    await upsert_thread(pool, request.thread_id, title=title)
-    yield "data: [DONE]\n\n"
+        await upsert_thread(pool, request.thread_id, title=title)
+    except Exception:
+        logger.exception("chat.stream failed thread=%s", request.thread_id)
+        yield _sse(
+            {"type": "error", "message": "El asistente falló al generar la respuesta."}
+        )
+    finally:
+        yield "data: [DONE]\n\n"
 
 
 @router.post("/stream")

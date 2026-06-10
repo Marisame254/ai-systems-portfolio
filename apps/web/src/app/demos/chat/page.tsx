@@ -103,10 +103,16 @@ function ChatPageInner() {
   const [pendingCheckpointId, setPendingCheckpointId] = useState<string | null>(null)
   const [branchError, setBranchError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const streamAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Abort any in-flight stream when the component unmounts.
+  useEffect(() => {
+    return () => streamAbortRef.current?.abort()
+  }, [])
 
   useEffect(() => {
     getChatInfo().then(setInfo).catch(() => {})
@@ -238,14 +244,21 @@ function ChatPageInner() {
 
     const checkpointForThisTurn = pendingCheckpointId
 
+    const controller = new AbortController()
+    streamAbortRef.current = controller
+
     try {
       for await (const event of streamChat(
         messageText,
         activeThreadId,
         getUserId(),
-        checkpointForThisTurn ? { checkpointId: checkpointForThisTurn } : undefined,
+        {
+          ...(checkpointForThisTurn ? { checkpointId: checkpointForThisTurn } : {}),
+          signal: controller.signal,
+        },
       )) {
         setMessages((prev) => {
+          if (prev.length === 0) return prev
           const updated = [...prev]
           const last = { ...updated[updated.length - 1] }
           if (event.type === 'token') {
@@ -261,6 +274,8 @@ function ChatPageInner() {
               }
             }
             last.toolCalls = calls
+          } else if (event.type === 'error') {
+            last.content = last.content || event.message
           }
           updated[updated.length - 1] = last
           return updated
@@ -283,8 +298,11 @@ function ChatPageInner() {
       } else {
         await refreshThreads(loadThreadIds())
       }
-    } catch {
+    } catch (err) {
+      // Aborting mid-stream (unmount / navigation) is not a real error.
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setMessages((prev) => {
+        if (prev.length === 0) return prev
         const updated = [...prev]
         updated[updated.length - 1] = {
           role: 'assistant',
@@ -293,6 +311,7 @@ function ChatPageInner() {
         return updated
       })
     } finally {
+      if (streamAbortRef.current === controller) streamAbortRef.current = null
       setIsStreaming(false)
     }
   }

@@ -265,7 +265,8 @@ class RAGService:
             raise RAGError("Failed to index document. Check embeddings provider.")
 
         row = await self._find_document(user_id, doc_id)
-        assert row is not None
+        if row is None:
+            raise RAGError("Document not found after insertion")
         return row
 
     # -- delete --
