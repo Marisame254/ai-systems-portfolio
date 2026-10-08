@@ -41,12 +41,16 @@ cp .env.example .env
 docker compose up postgres -d
 ```
 
+If another Postgres already listens on 5432, set `POSTGRES_PORT=5433` in `.env` and use the same port in `DATABASE_URL`. A `password authentication failed` error at API startup usually means `DATABASE_URL` is reaching that other server.
+
 ### 3. Start API
 
 ```bash
 cd apps/api
 uv run uvicorn main:app --reload --port 8000
 ```
+
+On Windows keep `--reload`: without it uvicorn uses the Proactor event loop, which psycopg's async mode does not support.
 
 ### 4. Start frontend
 
