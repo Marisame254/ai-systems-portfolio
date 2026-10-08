@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
+  ApiError,
   streamChat,
   getChatInfo,
   listThreadsByIds,
@@ -12,7 +13,6 @@ import {
   getThreadStateAtCheckpoint,
   type ChatInfo,
   type ThreadSummary,
-  type SerializedMessage,
 } from '@/lib/api'
 import {
   loadThreadIds,
@@ -20,29 +20,33 @@ import {
   removeThreadId,
   MAX_THREADS,
 } from '@/lib/thread-store'
+import { hydrateMessages } from '@/lib/messages'
 import { getUserId } from '@/lib/user'
 import { useLanguage } from '@/lib/i18n/provider'
 import type { Dictionary } from '@/lib/i18n'
-import { MessageBubble, type ChatMessageView, type ToolCall } from '@/components/chat/message-bubble'
+import { DemoBreadcrumb } from '@/components/demos/demo-shell'
+import { MessageBubble, type ChatMessageView } from '@/components/chat/message-bubble'
 import {
   Send,
-  Bot,
+  Square,
   Plus,
   Trash2,
-  MessageSquare,
-  Activity,
   AlertTriangle,
   Menu,
   X,
   GitBranch,
+  Loader2,
 } from 'lucide-react'
+
+// 'saving': the visible reply is complete and the graph is in save_memory.
+type Phase = 'idle' | 'answering' | 'saving'
 
 function newThreadId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
   return 'th_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-function relativeTime(iso: string | null, t: Dictionary['chatDemo']): string {
+function relativeTime(iso: string | null, t: Dictionary['common']): string {
   if (!iso) return ''
   const diff = Date.now() - new Date(iso).getTime()
   const m = Math.floor(diff / 60000)
@@ -52,35 +56,6 @@ function relativeTime(iso: string | null, t: Dictionary['chatDemo']): string {
   if (h < 24) return t.hoursAgo(h)
   const d = Math.floor(h / 24)
   return t.daysAgo(d)
-}
-
-function hydrateMessages(serialized: SerializedMessage[]): ChatMessageView[] {
-  // Pair AIMessage tool_calls with subsequent ToolMessages (by tool_call_id) into ChatMessageView.
-  const result: ChatMessageView[] = []
-  const toolResults = new Map<string, string>()
-  for (const m of serialized) {
-    if (m.type === 'tool' && m.tool_call_id) {
-      toolResults.set(m.tool_call_id, m.content)
-    }
-  }
-  for (const m of serialized) {
-    if (m.type === 'human') {
-      result.push({ role: 'user', content: m.content })
-    } else if (m.type === 'ai') {
-      const calls: ToolCall[] = (m.tool_calls ?? []).map((tc) => ({
-        name: tc.name,
-        args: tc.args,
-        result: tc.id ? toolResults.get(tc.id) : undefined,
-      }))
-      result.push({
-        role: 'assistant',
-        content: m.content,
-        toolCalls: calls.length ? calls : undefined,
-      })
-    }
-    // system / tool messages handled implicitly
-  }
-  return result
 }
 
 function ChatPageInner() {
@@ -97,13 +72,15 @@ function ChatPageInner() {
   const [activeThreadId, setActiveThreadId] = useState<string>('')
   const [messages, setMessages] = useState<ChatMessageView[]>([])
   const [input, setInput] = useState('')
-  const [isStreaming, setIsStreaming] = useState(false)
+  const [phase, setPhase] = useState<Phase>('idle')
   const [loadingThread, setLoadingThread] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [pendingCheckpointId, setPendingCheckpointId] = useState<string | null>(null)
   const [branchError, setBranchError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const streamAbortRef = useRef<AbortController | null>(null)
+
+  const busy = phase !== 'idle'
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -192,6 +169,7 @@ function ChatPageInner() {
   }, [])
 
   const startNewChat = useCallback(() => {
+    streamAbortRef.current?.abort()
     setActiveThreadId(newThreadId())
     setMessages([])
     setSidebarOpen(false)
@@ -215,8 +193,7 @@ function ChatPageInner() {
   }, [activeThreadId])
 
   const handleDeleteThread = useCallback(
-    async (threadId: string, e: React.MouseEvent) => {
-      e.stopPropagation()
+    async (threadId: string) => {
       const nextIds = removeThreadId(threadId)
       setThreadIds(nextIds)
       try {
@@ -232,15 +209,26 @@ function ChatPageInner() {
     [activeThreadId, startNewChat, refreshThreads]
   )
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!input.trim() || isStreaming) return
+  function replaceLastMessage(update: (last: ChatMessageView) => ChatMessageView) {
+    setMessages((prev) => {
+      if (prev.length === 0) return prev
+      const updated = [...prev]
+      updated[updated.length - 1] = update({ ...updated[updated.length - 1] })
+      return updated
+    })
+  }
 
-    const userMessage: ChatMessageView = { role: 'user', content: input }
-    setMessages((prev) => [...prev, userMessage, { role: 'assistant', content: '' }])
-    const messageText = input
+  async function send(text: string) {
+    const messageText = text.trim()
+    if (!messageText || busy) return
+
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', content: messageText },
+      { role: 'assistant', content: '' },
+    ])
     setInput('')
-    setIsStreaming(true)
+    setPhase('answering')
 
     const checkpointForThisTurn = pendingCheckpointId
 
@@ -248,19 +236,15 @@ function ChatPageInner() {
     streamAbortRef.current = controller
 
     try {
-      for await (const event of streamChat(
-        messageText,
-        activeThreadId,
-        getUserId(),
-        {
-          ...(checkpointForThisTurn ? { checkpointId: checkpointForThisTurn } : {}),
-          signal: controller.signal,
-        },
-      )) {
-        setMessages((prev) => {
-          if (prev.length === 0) return prev
-          const updated = [...prev]
-          const last = { ...updated[updated.length - 1] }
+      for await (const event of streamChat(messageText, activeThreadId, getUserId(), {
+        ...(checkpointForThisTurn ? { checkpointId: checkpointForThisTurn } : {}),
+        signal: controller.signal,
+      })) {
+        if (event.type === 'node') {
+          if (event.name === 'save_memory' && event.status === 'start') setPhase('saving')
+          continue
+        }
+        replaceLastMessage((last) => {
           if (event.type === 'token') {
             last.content = (last.content || '') + event.text
           } else if (event.type === 'tool_call') {
@@ -275,10 +259,9 @@ function ChatPageInner() {
             }
             last.toolCalls = calls
           } else if (event.type === 'error') {
-            last.content = last.content || event.message
+            last.content = last.content || tc.streamError
           }
-          updated[updated.length - 1] = last
-          return updated
+          return last
         })
       }
       // After a successful turn, we're at the head of whatever branch we forked into.
@@ -299,25 +282,31 @@ function ChatPageInner() {
         await refreshThreads(loadThreadIds())
       }
     } catch (err) {
-      // Aborting mid-stream (unmount / navigation) is not a real error.
+      // Stopping mid-stream (button, unmount, new chat) is not an error; keep what arrived.
       if (err instanceof DOMException && err.name === 'AbortError') return
-      setMessages((prev) => {
-        if (prev.length === 0) return prev
-        const updated = [...prev]
-        updated[updated.length - 1] = {
-          role: 'assistant',
-          content: tc.connectionError,
-        }
-        return updated
-      })
+      // The API explains rate limits and validation failures; anything else is a connection issue.
+      const message = err instanceof ApiError ? err.message : tc.connectionError
+      replaceLastMessage(() => ({ role: 'assistant', content: message }))
     } finally {
       if (streamAbortRef.current === controller) streamAbortRef.current = null
-      setIsStreaming(false)
+      setPhase('idle')
+    }
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    send(input)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault()
+      send(input)
     }
   }
 
   return (
-    <div className="relative mx-auto flex h-[calc(100vh-5rem)] max-w-7xl gap-3 px-3 py-4 sm:px-4 sm:py-6">
+    <div className="relative mx-auto flex h-[calc(100dvh-4rem)] max-w-7xl gap-4 px-3 py-4 sm:px-6 sm:py-6">
       {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
@@ -334,12 +323,10 @@ function ChatPageInner() {
         }`}
       >
         <div className="flex items-center justify-between border-b border-border p-3 md:hidden">
-          <span className="font-mono text-xs uppercase tracking-widest text-text-muted">
-            {tc.threadsHeader}
-          </span>
+          <span className="text-sm font-medium text-text-primary">{tc.threadsHeader}</span>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-text-secondary hover:text-accent-green"
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-text-secondary hover:text-text-primary"
             aria-label={tc.closeSidebarAria}
           >
             <X className="h-4 w-4" />
@@ -348,52 +335,57 @@ function ChatPageInner() {
         <div className="border-b border-border p-3">
           <button
             onClick={startNewChat}
-            className="flex w-full items-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-2 font-mono text-xs text-text-primary transition-colors hover:border-accent-green/40 hover:text-accent-green"
+            className="flex w-full items-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text-primary transition-colors hover:border-text-muted"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="h-4 w-4" />
             {tc.newChat}
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {threads.length === 0 ? (
-            <p className="px-2 py-4 text-center font-mono text-[11px] text-text-muted">
-              {tc.noThreadsYet}
-            </p>
+            <p className="px-2 py-4 text-center text-sm text-text-muted">{tc.noThreadsYet}</p>
           ) : (
             threads.map((thread) => (
-              <button
+              <div
                 key={thread.thread_id}
-                onClick={() => selectThread(thread.thread_id)}
-                className={`group mb-1 flex w-full items-start gap-2 rounded-md px-2 py-2 text-left transition-colors ${
-                  thread.thread_id === activeThreadId
-                    ? 'bg-accent-green/10 text-text-primary'
-                    : 'hover:bg-surface-2 text-text-secondary'
+                className={`group mb-1 flex items-start rounded-md transition-colors ${
+                  thread.thread_id === activeThreadId ? 'bg-surface-2' : 'hover:bg-surface-2/60'
                 }`}
               >
-                <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-text-muted" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs">{thread.title || tc.untitled}</p>
-                  <p className="font-mono text-[10px] text-text-muted">
-                    {relativeTime(thread.updated_at, tc)}
-                  </p>
-                </div>
                 <button
-                  onClick={(e) => handleDeleteThread(thread.thread_id, e)}
-                  className="opacity-0 transition-opacity group-hover:opacity-100"
+                  onClick={() => selectThread(thread.thread_id)}
+                  aria-current={thread.thread_id === activeThreadId ? 'true' : undefined}
+                  className="min-w-0 flex-1 px-3 py-2 text-left"
+                >
+                  <p
+                    className={`truncate text-sm ${
+                      thread.thread_id === activeThreadId
+                        ? 'text-text-primary'
+                        : 'text-text-secondary'
+                    }`}
+                  >
+                    {thread.title || tc.untitled}
+                  </p>
+                  <p className="text-xs text-text-muted">
+                    {relativeTime(thread.updated_at, t.common)}
+                  </p>
+                </button>
+                <button
+                  onClick={() => handleDeleteThread(thread.thread_id)}
+                  className="m-1 rounded p-1.5 text-text-muted opacity-100 transition-opacity hover:text-red-400 focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
                   aria-label={tc.deleteThreadAria}
                 >
-                  <Trash2 className="h-3 w-3 text-text-muted hover:text-red-400" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
-              </button>
+              </div>
             ))
           )}
         </div>
         <div className="border-t border-border p-3">
           <Link
             href={`/demos/state?thread=${activeThreadId}`}
-            className="flex items-center gap-2 font-mono text-[11px] text-text-muted transition-colors hover:text-accent-cyan"
+            className="text-sm text-text-secondary underline-offset-4 hover:text-accent hover:underline"
           >
-            <Activity className="h-3 w-3" />
             {tc.inspectState}
           </Link>
         </div>
@@ -404,38 +396,48 @@ function ChatPageInner() {
         <div className="mb-3 flex items-start gap-3">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-text-secondary transition-colors hover:border-accent-green/50 hover:text-accent-green md:hidden"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border text-text-secondary transition-colors hover:text-text-primary md:hidden"
             aria-label={tc.openThreadsAria}
           >
             <Menu className="h-4 w-4" />
           </button>
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-accent-green sm:text-xs">
-              {tc.label}
-            </p>
-            <h1 className="text-lg font-bold text-text-primary sm:text-xl">{tc.title}</h1>
-            <p className="text-[11px] text-text-secondary sm:text-xs">
+            <DemoBreadcrumb current={t.demos.chat.title} />
+            <h1 className="mt-1 text-xl font-semibold tracking-tight text-text-primary">
+              {t.demos.chat.title}
+            </h1>
+            <p className="truncate text-xs text-text-muted">
               {info
                 ? tc.subtitleProvider(info.provider === 'openai' ? 'OpenAI' : 'Ollama', info.model)
                 : tc.subtitleStateful}
-            </p>
-            <p className="mt-1 truncate font-mono text-[10px] text-text-muted">
-              {tc.thread}: {activeThreadId}
+              <span className="mx-2" aria-hidden>
+                |
+              </span>
+              {tc.thread} <span className="font-mono">{activeThreadId.slice(0, 8)}</span>
             </p>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto rounded-lg border border-border bg-surface p-3 sm:p-4">
           {loadingThread ? (
-            <p className="text-center font-mono text-xs text-text-muted">{tc.loadingThread}</p>
+            <p className="text-center text-sm text-text-muted">{tc.loadingThread}</p>
           ) : messages.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-center">
-              <div>
-                <Bot className="mx-auto mb-3 h-10 w-10 text-accent-green/30" />
-                <p className="font-mono text-sm text-text-muted">{tc.emptyTitle}</p>
-                <p className="mt-1 font-mono text-xs text-text-muted/60">
-                  {tc.emptySubtitle}
-                </p>
+            <div className="flex h-full flex-col justify-center py-6">
+              <div className="mx-auto w-full max-w-xl">
+                <p className="text-lg font-medium text-text-primary">{tc.emptyTitle}</p>
+                <p className="mt-1 text-sm text-text-secondary">{tc.emptySubtitle}</p>
+                <ul className="mt-5 space-y-2">
+                  {tc.suggestions.map((suggestion) => (
+                    <li key={suggestion}>
+                      <button
+                        onClick={() => send(suggestion)}
+                        className="w-full rounded-md border border-border px-3 py-2.5 text-left text-sm text-text-secondary transition-colors hover:border-accent/60 hover:text-text-primary"
+                      >
+                        {suggestion}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           ) : (
@@ -443,7 +445,7 @@ function ChatPageInner() {
               <MessageBubble
                 key={i}
                 msg={msg}
-                isStreaming={isStreaming && i === messages.length - 1}
+                isStreaming={phase === 'answering' && i === messages.length - 1}
               />
             ))
           )}
@@ -451,19 +453,19 @@ function ChatPageInner() {
         </div>
 
         {threadIds.length >= MAX_THREADS && !threadIds.includes(activeThreadId) && (
-          <div className="mt-2 flex items-center gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-1.5 font-mono text-[11px] text-yellow-300">
-            <AlertTriangle className="h-3 w-3" />
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-xs text-yellow-300">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
             {tc.maxThreadsWarning(MAX_THREADS)}
           </div>
         )}
 
         {pendingCheckpointId && (
-          <div className="mt-2 flex items-center gap-2 rounded-md border border-accent-cyan/30 bg-accent-cyan/5 px-3 py-1.5 font-mono text-[11px] text-accent-cyan">
-            <GitBranch className="h-3 w-3 shrink-0" />
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-accent">
+            <GitBranch className="h-3.5 w-3.5 shrink-0" />
             <span className="flex-1">{tc.branchBanner}</span>
             <button
               onClick={cancelBranch}
-              className="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-text-muted transition-colors hover:bg-surface hover:text-text-primary"
+              className="shrink-0 rounded px-2 py-0.5 text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
             >
               {tc.branchCancel}
             </button>
@@ -471,38 +473,59 @@ function ChatPageInner() {
         )}
 
         {branchError && !pendingCheckpointId && (
-          <div className="mt-2 flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-1.5 font-mono text-[11px] text-red-400">
-            <AlertTriangle className="h-3 w-3" />
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-400">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
             {branchError}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-3 flex gap-2 sm:gap-3">
-          <input
-            type="text"
+        <form onSubmit={handleSubmit} className="mt-3 flex items-end gap-2 sm:gap-3">
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder={tc.inputPlaceholder}
-            disabled={isStreaming}
-            className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-3 text-base text-text-primary placeholder-text-muted outline-none transition-all focus:border-accent-green/50 focus:ring-1 focus:ring-accent-green/20 disabled:opacity-50 sm:px-4 sm:text-sm"
+            aria-label={tc.inputPlaceholder}
+            rows={1}
+            maxLength={4000}
+            className="max-h-40 min-h-[3rem] min-w-0 flex-1 resize-none rounded-lg border border-border bg-surface px-3 py-3 text-base text-text-primary placeholder-text-muted outline-none transition-colors focus:border-accent/60 sm:px-4 sm:text-sm"
           />
-          <button
-            type="submit"
-            disabled={!input.trim() || isStreaming}
-            aria-label={tc.sendAria}
-            className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-accent-green px-4 py-3 text-sm font-medium text-black transition-all hover:bg-accent-green/90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Send className="h-4 w-4" />
-          </button>
+          {phase === 'answering' ? (
+            <button
+              type="button"
+              onClick={() => streamAbortRef.current?.abort()}
+              className="flex h-12 shrink-0 items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-medium text-text-primary transition-colors hover:border-text-muted"
+            >
+              <Square className="h-3.5 w-3.5 fill-current" />
+              {tc.stop}
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!input.trim() || busy}
+              aria-label={tc.sendAria}
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-accent text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {phase === 'saving' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </button>
+          )}
         </form>
+        <p className="mt-1.5 hidden text-xs text-text-muted sm:block" aria-live="polite">
+          {phase === 'saving' ? tc.savingMemory : tc.inputHint}
+        </p>
       </div>
     </div>
   )
 }
 
 export default function ChatPage() {
+  const { t } = useLanguage()
   return (
-    <Suspense fallback={<div className="p-6 font-mono text-xs text-text-muted">loading…</div>}>
+    <Suspense fallback={<div className="p-6 text-sm text-text-muted">{t.common.loading}</div>}>
       <ChatPageInner />
     </Suspense>
   )

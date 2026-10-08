@@ -1,8 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Brain, RefreshCw, Trash2, Plus, Loader2, Sparkles, Hand } from 'lucide-react'
+import { RefreshCw, Trash2, Loader2 } from 'lucide-react'
 import {
+  ApiError,
   listMemories,
   addMemory as apiAddMemory,
   deleteMemory as apiDeleteMemory,
@@ -10,18 +11,12 @@ import {
   type MemoryEntry,
 } from '@/lib/api'
 import { getUserId } from '@/lib/user'
+import { demoById } from '@/lib/demos'
 import { useLanguage } from '@/lib/i18n/provider'
-
-function formatTimestamp(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString('en-CA', { hour12: false }).replace(',', '')
-  } catch {
-    return iso
-  }
-}
+import { DemoShell } from '@/components/demos/demo-shell'
 
 export default function MemoryPage() {
-  const { t } = useLanguage()
+  const { t, locale } = useLanguage()
   const tm = t.memoryDemo
   const [userId, setUserId] = useState<string>('')
   const [memories, setMemories] = useState<MemoryEntry[]>([])
@@ -52,31 +47,31 @@ export default function MemoryPage() {
     if (uid) refresh(uid)
   }, [refresh])
 
-  async function handleAdd() {
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault()
     const text = newText.trim()
     if (!text || busy) return
     setBusy(true)
+    setError(null)
     try {
       const created = await apiAddMemory(userId, text)
       setMemories((prev) => [created, ...prev])
       setNewText('')
-    } catch {
-      setError(tm.errors.add)
+    } catch (err) {
+      // The API explains the per-user cap and rate limits.
+      setError(err instanceof ApiError ? err.message : tm.errors.add)
     } finally {
       setBusy(false)
     }
   }
 
   async function handleRemove(key: string) {
-    let prev: MemoryEntry[] = []
-    setMemories((cur) => {
-      prev = cur
-      return cur.filter((m) => m.key !== key)
-    })
+    const before = memories
+    setMemories(before.filter((m) => m.key !== key))
     try {
       await apiDeleteMemory(userId, key)
     } catch {
-      setMemories(prev)
+      setMemories(before)
       setError(tm.errors.remove)
     }
   }
@@ -94,131 +89,111 @@ export default function MemoryPage() {
     }
   }
 
-  return (
-    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
-      <div className="mb-6 sm:mb-8">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-accent-cyan sm:text-xs">
-          {tm.label}
-        </p>
-        <h1 className="text-xl font-bold text-text-primary sm:text-2xl">{tm.title}</h1>
-        <p className="text-xs text-text-secondary sm:text-sm">{tm.description}</p>
-      </div>
+  const formatTimestamp = (iso: string) => {
+    const date = new Date(iso)
+    return Number.isNaN(date.getTime())
+      ? iso
+      : date.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })
+  }
 
-      {/* Session info */}
+  return (
+    <DemoShell title={tm.title} description={tm.description} stack={demoById('memory').stack}>
       <div className="mb-6 flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Brain className="h-5 w-5 shrink-0 text-accent-cyan" />
-          <div className="min-w-0">
-            <p className="font-mono text-xs text-text-muted">{tm.userIdLabel}</p>
-            <p className="truncate font-mono text-sm text-accent-cyan">{userId || '…'}</p>
-          </div>
+        <div className="min-w-0">
+          <p className="text-xs text-text-muted">{tm.userIdLabel}</p>
+          <p className="truncate font-mono text-sm text-text-primary">{userId || '…'}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-xs text-text-muted">{tm.entryCount(memories.length)}</span>
+          <span className="text-sm text-text-secondary">{tm.entryCount(memories.length)}</span>
           <button
             onClick={() => userId && refresh(userId)}
             disabled={loading}
-            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-mono text-xs text-text-muted transition-all hover:border-accent-cyan/30 hover:text-accent-cyan disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary transition-colors hover:border-text-muted hover:text-text-primary disabled:opacity-50"
           >
-            <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} /> {tm.refresh}
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> {tm.refresh}
           </button>
           <button
             onClick={handleClear}
             disabled={busy || memories.length === 0}
-            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-mono text-xs text-text-muted transition-all hover:border-red-500/30 hover:text-red-400 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary transition-colors hover:border-red-500/40 hover:text-red-400 disabled:opacity-50"
           >
-            <Trash2 className="h-3 w-3" /> {tm.clearAll}
+            <Trash2 className="h-3.5 w-3.5" /> {tm.clearAll}
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 font-mono text-xs text-red-400">
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-400"
+        >
           {error}
         </div>
       )}
 
-      {/* Memory entries */}
-      <div className="mb-6 space-y-3">
-        {loading ? (
-          <div className="flex items-center justify-center rounded-lg border border-dashed border-border py-12">
-            <Loader2 className="h-5 w-5 animate-spin text-accent-cyan/50" />
+      {loading ? (
+        <div className="flex items-center justify-center rounded-lg border border-dashed border-border py-12">
+          <Loader2 className="h-5 w-5 animate-spin text-text-muted" />
+        </div>
+      ) : memories.length === 0 ? (
+        // A failed load is not "no memories"; the alert above already says what happened.
+        !error && (
+          <div className="rounded-lg border border-dashed border-border px-4 py-10 text-center">
+          <p className="text-base text-text-primary">{tm.noEntriesTitle}</p>
+            <p className="mt-1 text-sm text-text-secondary">{tm.noEntriesHint}</p>
           </div>
-        ) : memories.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center">
-            <Brain className="mb-3 h-8 w-8 text-accent-cyan/30" />
-            <p className="font-mono text-sm text-text-muted">{tm.noEntriesTitle}</p>
-            <p className="mt-1 font-mono text-xs text-text-muted/70">{tm.noEntriesHint}</p>
-          </div>
-        ) : (
-          memories.map((mem) => (
-            <div
-              key={mem.key}
-              className="group flex items-start justify-between rounded-lg border border-border bg-surface p-4 transition-all hover:border-accent-cyan/20"
-            >
-              <div className="flex-1 pr-4">
-                <div className="mb-1 flex items-center gap-2">
-                  <span
-                    className={`flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${
-                      mem.source === 'auto'
-                        ? 'bg-accent-cyan/10 text-accent-cyan'
-                        : 'bg-accent-green/10 text-accent-green'
-                    }`}
-                  >
-                    {mem.source === 'auto' ? (
-                      <Sparkles className="h-2.5 w-2.5" />
-                    ) : (
-                      <Hand className="h-2.5 w-2.5" />
-                    )}
-                    {mem.source}
+        )
+      ) : (
+        <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
+          {memories.map((mem) => (
+            <li key={mem.key} className="flex items-start justify-between gap-4 p-4">
+              <div className="min-w-0">
+                <p className="text-sm text-text-primary">{mem.text}</p>
+                <p className="mt-1 text-xs text-text-muted">
+                  <span className={mem.source === 'auto' ? 'text-node-memory' : 'text-text-secondary'}>
+                    {mem.source === 'auto' ? tm.sourceAuto : tm.sourceManual}
                   </span>
-                  <span className="font-mono text-xs text-text-muted">
-                    {formatTimestamp(mem.created_at)}
-                  </span>
-                </div>
-                <p className="text-sm text-text-secondary">{mem.text}</p>
+                  , {formatTimestamp(mem.created_at)}
+                </p>
               </div>
               <button
                 onClick={() => handleRemove(mem.key)}
-                className="shrink-0 rounded p-1 text-text-muted opacity-0 transition-all group-hover:opacity-100 hover:text-red-400"
+                className="shrink-0 rounded p-2 text-text-muted transition-colors hover:bg-surface-2 hover:text-red-400"
                 aria-label={tm.deleteEntryAria}
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className="h-4 w-4" />
               </button>
-            </div>
-          ))
-        )}
-      </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
-      {/* Add memory */}
-      <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
-        <h2 className="mb-4 font-mono text-xs uppercase tracking-widest text-accent-cyan">
+      <form
+        onSubmit={handleAdd}
+        className="mt-6 rounded-lg border border-border bg-surface p-4 sm:p-6"
+      >
+        <label htmlFor="new-memory" className="text-base font-semibold text-text-primary">
           {tm.addEntryHeader}
-        </h2>
-        <div className="flex flex-col gap-3">
+        </label>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
           <input
+            id="new-memory"
             value={newText}
             onChange={(e) => setNewText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
             placeholder={tm.addEntryPlaceholder}
-            className="rounded-lg border border-border bg-surface-2 px-3 py-3 text-base text-text-primary placeholder-text-muted outline-none transition-all focus:border-accent-cyan/50 sm:px-4 sm:py-2.5 sm:text-sm"
+            maxLength={300}
+            className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-3 py-2.5 text-base text-text-primary placeholder-text-muted outline-none transition-colors focus:border-accent/60 sm:text-sm"
           />
           <button
-            onClick={handleAdd}
+            type="submit"
             disabled={!newText.trim() || busy}
-            className="flex items-center justify-center gap-2 rounded-lg border border-accent-cyan/50 bg-accent-cyan/10 px-4 py-2.5 text-sm font-medium text-accent-cyan transition-all hover:bg-accent-cyan/20 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex shrink-0 items-center justify-center gap-2 rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             {tm.addEntryButton}
           </button>
         </div>
-      </div>
-
-      <div className="mt-4 rounded-lg border border-border bg-surface p-4">
-        <p className="font-mono text-xs text-text-muted">
-          <span className="text-accent-cyan">{'>'}</span> {tm.footer}
-        </p>
-      </div>
-    </div>
+      </form>
+    </DemoShell>
   )
 }

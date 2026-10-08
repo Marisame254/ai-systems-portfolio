@@ -1,28 +1,28 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import type { Components } from 'react-markdown'
+import { Upload, FileText, Loader2, Trash2, AlertCircle, Square } from 'lucide-react'
 import {
-  Upload,
-  Search,
-  FileText,
-  Loader2,
-  Trash2,
-  AlertCircle,
-  Database,
-} from 'lucide-react'
-import {
+  ApiError,
   deleteDocument,
   getRAGInfo,
   listDocuments,
-  queryRAG,
+  streamRAGQuery,
   uploadDocument,
   type DocumentInfo,
   type RAGInfo,
-  type RAGQueryResponse,
+  type RAGSource,
 } from '@/lib/api'
 import { getUserId } from '@/lib/user'
+import { demoById } from '@/lib/demos'
 import { useLanguage } from '@/lib/i18n/provider'
+import type { Dictionary } from '@/lib/i18n'
+import { DemoShell } from '@/components/demos/demo-shell'
+import { MarkdownContent } from '@/components/chat/message-bubble'
+
+const CITATION_HREF = '#source-'
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -30,21 +30,40 @@ function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
-function fileExt(name: string): string {
-  const dot = name.lastIndexOf('.')
-  return dot === -1 ? '' : name.slice(dot + 1).toUpperCase()
-}
-
-function relativeTime(iso: string | null | undefined): string {
+function relativeTime(iso: string | null | undefined, t: Dictionary['common']): string {
   if (!iso) return ''
   const diff = Date.now() - new Date(iso).getTime()
   const m = Math.floor(diff / 60000)
-  if (m < 1) return 'just now'
-  if (m < 60) return `${m}m ago`
+  if (m < 1) return t.justNow
+  if (m < 60) return t.minutesAgo(m)
   const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  const d = Math.floor(h / 24)
-  return `${d}d ago`
+  if (h < 24) return t.hoursAgo(h)
+  return t.daysAgo(Math.floor(h / 24))
+}
+
+/** Turns the model's `[n]` markers into links so they render as citation buttons. */
+function linkCitations(answer: string, sourceCount: number): string {
+  return answer.replace(/\[(\d+)\](?!\()/g, (match, n) =>
+    Number(n) >= 1 && Number(n) <= sourceCount ? `[${n}](${CITATION_HREF}${n})` : match
+  )
+}
+
+function ErrorNote({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-sm text-red-400"
+    >
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{children}</span>
+    </div>
+  )
+}
+
+interface Result {
+  answer: string
+  sources: RAGSource[] | null // null until the sources event arrives
+  model: string
 }
 
 export default function RAGPage() {
@@ -55,29 +74,37 @@ export default function RAGPage() {
   const [info, setInfo] = useState<RAGInfo | null>(null)
   const [docs, setDocs] = useState<DocumentInfo[]>([])
   const [loading, setLoading] = useState(true)
+  const [docsError, setDocsError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const [query, setQuery] = useState('')
   const [filterFilename, setFilterFilename] = useState<string>('')
   const [isQuerying, setIsQuerying] = useState(false)
   const [queryError, setQueryError] = useState<string | null>(null)
-  const [result, setResult] = useState<RAGQueryResponse | null>(null)
+  const [result, setResult] = useState<Result | null>(null)
+  const [activeSource, setActiveSource] = useState<number | null>(null)
 
   const fileRef = useRef<HTMLInputElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const sourceRefs = useRef<Record<number, HTMLLIElement | null>>({})
 
-  const refresh = useCallback(async (uid: string) => {
-    setLoading(true)
-    try {
-      const data = await listDocuments(uid)
-      setDocs(data.documents)
-    } catch {
-      setDocs([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const refresh = useCallback(
+    async (uid: string) => {
+      setLoading(true)
+      try {
+        const data = await listDocuments(uid)
+        setDocs(data.documents)
+        setDocsError(null)
+      } catch {
+        setDocs([])
+        setDocsError(tr.listFailed)
+      } finally {
+        setLoading(false)
+      }
+    },
+    [tr.listFailed]
+  )
 
   useEffect(() => {
     const uid = getUserId()
@@ -88,35 +115,39 @@ export default function RAGPage() {
     refresh(uid)
   }, [refresh])
 
-  const atLimit = info ? docs.length >= info.max_docs_per_user : false
+  useEffect(() => {
+    return () => abortRef.current?.abort()
+  }, [])
+
+  const maxDocs = info?.max_docs_per_user ?? 3
+  const atLimit = docs.length >= maxDocs
 
   async function handleUpload(f: File) {
     if (!userId || atLimit || uploading) return
-    setUploadError(null)
+    setDocsError(null)
     setUploading(true)
     try {
       await uploadDocument(f, userId)
       await refresh(userId)
     } catch (e) {
-      setUploadError(e instanceof Error ? e.message : tr.uploadFailed)
+      setDocsError(e instanceof ApiError ? e.message : tr.uploadFailed)
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
     }
   }
 
-  async function handleDelete(docId: string) {
+  async function handleDelete(doc: DocumentInfo) {
     if (!userId || deletingId) return
-    setDeletingId(docId)
+    setDeletingId(doc.id)
+    setDocsError(null)
     try {
-      await deleteDocument(userId, docId)
+      await deleteDocument(userId, doc.id)
+      const stillThere = docs.some((d) => d.id !== doc.id && d.filename === filterFilename)
+      if (!stillThere) setFilterFilename('')
       await refresh(userId)
-      if (filterFilename) {
-        const stillThere = docs.some((d) => d.id !== docId && d.filename === filterFilename)
-        if (!stillThere) setFilterFilename('')
-      }
-    } catch {
-      // swallow; could surface a toast later
+    } catch (e) {
+      setDocsError(e instanceof ApiError ? e.message : tr.deleteFailed)
     } finally {
       setDeletingId(null)
     }
@@ -127,66 +158,110 @@ export default function RAGPage() {
     if (!query.trim() || isQuerying) return
     setQueryError(null)
     setIsQuerying(true)
-    setResult(null)
+    setResult({ answer: '', sources: null, model: '' })
+    setActiveSource(null)
+
+    const controller = new AbortController()
+    abortRef.current = controller
+
     try {
-      const data = await queryRAG(query, userId, {
+      for await (const event of streamRAGQuery(query, userId, {
         filename: filterFilename || undefined,
-      })
-      setResult(data)
-    } catch (e) {
-      setQueryError(e instanceof Error ? e.message : tr.queryFailed)
+        signal: controller.signal,
+      })) {
+        if (event.type === 'sources') {
+          setResult((r) => r && { ...r, sources: event.sources, model: event.model })
+        } else if (event.type === 'token') {
+          setResult((r) => r && { ...r, answer: r.answer + event.text })
+        } else if (event.type === 'error') {
+          setQueryError(tr.queryFailed)
+        }
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      setResult(null)
+      setQueryError(err instanceof ApiError ? err.message : tr.queryFailed)
     } finally {
+      if (abortRef.current === controller) abortRef.current = null
       setIsQuerying(false)
     }
   }
 
+  const focusSource = useCallback((n: number) => {
+    setActiveSource(n)
+    sourceRefs.current[n]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [])
+
+  const citationComponents = useMemo<Components>(
+    () => ({
+      a: ({ href, children, ...props }) => {
+        if (href?.startsWith(CITATION_HREF)) {
+          const n = Number(href.slice(CITATION_HREF.length))
+          return (
+            <button
+              type="button"
+              onClick={() => focusSource(n)}
+              aria-label={tr.citationAria(n)}
+              className="mx-0.5 rounded border border-accent/40 bg-accent/10 px-1.5 align-baseline text-xs font-medium text-accent transition-colors hover:bg-accent/20"
+            >
+              {children}
+            </button>
+          )
+        }
+        return (
+          <a
+            href={href}
+            className="text-accent underline underline-offset-2"
+            target="_blank"
+            rel="noreferrer"
+            {...props}
+          >
+            {children}
+          </a>
+        )
+      },
+    }),
+    [focusSource, tr]
+  )
+
+  const sources = result?.sources ?? []
+  const noRelevant = result !== null && result.sources !== null && sources.length === 0
+
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
-      <div className="mb-6 sm:mb-8">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-accent-cyan sm:text-xs">
-          {tr.label}
-        </p>
-        <h1 className="text-xl font-bold text-text-primary sm:text-2xl">{tr.title}</h1>
-        <p className="text-xs text-text-secondary sm:text-sm">
-          {tr.descBefore} {info?.max_docs_per_user ?? 3} {tr.descMiddle}{' '}
-          <Link href="/demos/chat" className="text-accent-cyan hover:underline">
+    <DemoShell
+      title={tr.title}
+      stack={demoById('rag').stack}
+      description={
+        <>
+          {tr.descBefore} {maxDocs} {tr.descMiddle}{' '}
+          <Link href="/demos/chat" className="text-accent underline-offset-4 hover:underline">
             {tr.chatAgent}
           </Link>{' '}
-          {tr.descAfter} <code className="font-mono text-accent-cyan">search_user_documents</code>{' '}
-          {tr.descToolSuffix}
-        </p>
-        {info && (
-          <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-text-muted sm:text-xs">
-            <span className="flex items-center gap-1.5">
-              <Database className="h-3 w-3" /> {tr.pgvector}
-            </span>
-            <span>
-              · {info.provider} {info.embedding_model} · {info.dim}d
-            </span>
-            <span>
-              · {tr.accepted} {info.supported_types.join(', ')}
-            </span>
-          </p>
-        )}
-      </div>
-
-      {/* Documents card */}
-      <div className="mb-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-mono text-sm text-text-secondary">
+          {tr.descAfter} <code className="font-mono text-text-primary">search_user_documents</code>
+          {tr.descToolSuffix === '.' ? '.' : ` ${tr.descToolSuffix}`}
+        </>
+      }
+    >
+      {/* Documents */}
+      <section className="rounded-lg border border-border bg-surface p-4 sm:p-6">
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-base font-semibold text-text-primary">
             {tr.yourDocuments}{' '}
-            <span className="text-text-muted">
-              ({docs.length}/{info?.max_docs_per_user ?? 3})
+            <span className="font-normal text-text-muted">
+              {docs.length}/{maxDocs}
             </span>
           </h2>
-          {atLimit && (
-            <span className="font-mono text-[11px] text-yellow-300">{tr.limitReached}</span>
+          {info && (
+            <p className="text-xs text-text-muted">
+              <span className="font-mono">{info.embedding_model}</span>, {info.dim}d
+            </p>
           )}
         </div>
 
-        {/* Upload zone */}
-        <div
-          onClick={() => !atLimit && !uploading && fileRef.current?.click()}
+        <button
+          type="button"
+          disabled={atLimit || uploading}
+          onClick={() => fileRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault()
@@ -194,28 +269,28 @@ export default function RAGPage() {
             const f = e.dataTransfer.files[0]
             if (f) handleUpload(f)
           }}
-          className={`flex min-h-[120px] flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 transition-all sm:p-6 ${
-            atLimit
-              ? 'cursor-not-allowed border-border opacity-50'
-              : 'cursor-pointer border-border hover:border-accent-cyan/40'
-          }`}
+          className="flex min-h-[112px] w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-border p-4 text-center transition-colors enabled:hover:border-accent/50 disabled:cursor-not-allowed disabled:opacity-60 sm:p-6"
         >
           {uploading ? (
             <>
-              <Loader2 className="mb-2 h-6 w-6 animate-spin text-accent-cyan" />
-              <p className="font-mono text-xs text-text-muted">{tr.embedding}</p>
+              <Loader2 className="mb-2 h-5 w-5 animate-spin text-accent" />
+              <span className="text-sm text-text-secondary">{tr.embedding}</span>
             </>
           ) : (
             <>
-              <Upload
-                className={`mb-2 h-6 w-6 ${atLimit ? 'text-text-muted/30' : 'text-accent-cyan/50'}`}
-              />
-              <p className="text-center text-xs text-text-secondary sm:text-sm">
+              <Upload className="mb-2 h-5 w-5 text-text-muted" />
+              <span className="text-sm text-text-secondary">
                 {atLimit ? tr.limitDelete : tr.uploadDrop}
-              </p>
+              </span>
+              {info && !atLimit && (
+                <span className="mt-1 text-xs text-text-muted">
+                  {tr.accepted} {info.supported_types.join(', ')} (max{' '}
+                  {formatBytes(info.max_upload_bytes)})
+                </span>
+              )}
             </>
           )}
-        </div>
+        </button>
         <input
           ref={fileRef}
           type="file"
@@ -227,160 +302,201 @@ export default function RAGPage() {
           }}
         />
 
-        {uploadError && (
-          <div className="mt-3 flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 font-mono text-xs text-red-400">
-            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{uploadError}</span>
+        {docsError && (
+          <div className="mt-3">
+            <ErrorNote>{docsError}</ErrorNote>
           </div>
         )}
 
-        {/* Doc list */}
-        <div className="mt-4 space-y-2">
+        <ul className="mt-4 space-y-2">
           {loading ? (
-            <p className="py-3 text-center font-mono text-xs text-text-muted">{tr.loading}</p>
+            <li className="py-3 text-center text-sm text-text-muted">{t.common.loading}</li>
           ) : docs.length === 0 ? (
-            <p className="py-3 text-center font-mono text-xs text-text-muted">{tr.noDocs}</p>
+            <li className="py-3 text-center text-sm text-text-muted">{tr.noDocs}</li>
           ) : (
             docs.map((d) => (
-              <div
+              <li
                 key={d.id}
                 className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-2 px-3 py-2"
               >
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <FileText className="h-4 w-4 shrink-0 text-accent-cyan" />
+                  <FileText className="h-4 w-4 shrink-0 text-text-muted" />
                   <div className="min-w-0">
                     <p className="truncate text-sm text-text-primary">{d.filename}</p>
-                    <p className="flex flex-wrap gap-x-2 font-mono text-[10px] text-text-muted">
-                      <span>{fileExt(d.filename) || 'FILE'}</span>
-                      <span>· {d.chunks_count} chunks</span>
-                      <span>· {formatBytes(d.byte_size)}</span>
-                      <span>· {relativeTime(d.created_at)}</span>
+                    <p className="text-xs text-text-muted">
+                      {tr.chunks(d.chunks_count)}, {formatBytes(d.byte_size)},{' '}
+                      {relativeTime(d.created_at, t.common)}
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => handleDelete(d.id)}
+                  onClick={() => handleDelete(d)}
                   disabled={deletingId === d.id}
                   aria-label={`${tr.deleteAria} ${d.filename}`}
-                  className="shrink-0 rounded p-1.5 text-text-muted transition-colors hover:bg-surface hover:text-red-400 disabled:opacity-50"
+                  className="shrink-0 rounded p-2 text-text-muted transition-colors hover:bg-surface hover:text-red-400 disabled:opacity-50"
                 >
                   {deletingId === d.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-4 w-4" />
                   )}
                 </button>
-              </div>
+              </li>
             ))
           )}
-        </div>
-      </div>
+        </ul>
+      </section>
 
-      {/* Query card */}
-      <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
-        <h2 className="mb-4 font-mono text-sm text-text-secondary">{tr.ask}</h2>
+      {/* Question */}
+      <section className="mt-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
+        <h2 className="mb-4 text-base font-semibold text-text-primary">{tr.ask}</h2>
         <form onSubmit={handleQuery} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <label className="font-mono text-xs text-text-muted">{tr.filter}</label>
-            <select
-              value={filterFilename}
-              onChange={(e) => setFilterFilename(e.target.value)}
-              disabled={docs.length === 0}
-              className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-3 py-1.5 font-mono text-xs text-text-primary outline-none focus:border-accent-cyan/50 disabled:opacity-50 sm:flex-none sm:max-w-xs"
-            >
-              <option value="">{tr.allDocuments}</option>
-              {docs.map((d) => (
-                <option key={d.id} value={d.filename}>
-                  {d.filename}
-                </option>
-              ))}
-            </select>
-          </div>
           <textarea
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                e.currentTarget.form?.requestSubmit()
+              }
+            }}
             placeholder={tr.queryPlaceholder}
-            rows={4}
+            aria-label={tr.ask}
+            rows={3}
+            maxLength={1000}
             disabled={docs.length === 0}
-            className="w-full resize-none rounded-lg border border-border bg-surface-2 px-3 py-3 text-base text-text-primary placeholder-text-muted outline-none transition-all focus:border-accent-cyan/50 disabled:opacity-50 sm:px-4 sm:text-sm"
+            className="w-full resize-none rounded-lg border border-border bg-surface-2 px-3 py-3 text-base text-text-primary placeholder-text-muted outline-none transition-colors focus:border-accent/60 disabled:opacity-50 sm:px-4 sm:text-sm"
           />
-          <button
-            type="submit"
-            disabled={!query.trim() || isQuerying || docs.length === 0}
-            className="flex items-center justify-center gap-2 rounded-lg border border-accent-cyan/50 bg-accent-cyan/10 px-4 py-2.5 text-sm font-medium text-accent-cyan transition-all hover:bg-accent-cyan/20 disabled:cursor-not-allowed disabled:opacity-50"
-          >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <label className="flex items-center gap-2 text-sm text-text-secondary">
+              {tr.filter}
+              <select
+                value={filterFilename}
+                onChange={(e) => setFilterFilename(e.target.value)}
+                disabled={docs.length === 0}
+                className="min-w-0 max-w-[14rem] rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent/60 disabled:opacity-50"
+              >
+                <option value="">{tr.allDocuments}</option>
+                {docs.map((d) => (
+                  <option key={d.id} value={d.filename}>
+                    {d.filename}
+                  </option>
+                ))}
+              </select>
+            </label>
             {isQuerying ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <button
+                type="button"
+                onClick={() => abortRef.current?.abort()}
+                className="flex items-center justify-center gap-2 rounded-md border border-border px-5 py-2.5 text-sm font-medium text-text-primary transition-colors hover:border-text-muted"
+              >
+                <Square className="h-3.5 w-3.5 fill-current" />
+                {tr.stop}
+              </button>
             ) : (
-              <Search className="h-4 w-4" />
+              <button
+                type="submit"
+                disabled={!query.trim() || docs.length === 0}
+                className="rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {tr.queryButton}
+              </button>
             )}
-            {isQuerying ? tr.querying : tr.queryButton}
-          </button>
-          {docs.length === 0 && (
-            <p className="font-mono text-[11px] text-text-muted">{tr.uploadFirst}</p>
+          </div>
+          {!loading && docs.length === 0 && (
+            <p className="text-sm text-text-muted">{tr.uploadFirst}</p>
           )}
         </form>
-      </div>
+      </section>
 
-      {/* Query error */}
       {queryError && (
-        <div className="mt-4 flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 font-mono text-xs text-red-400">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>{queryError}</span>
+        <div className="mt-4">
+          <ErrorNote>{queryError}</ErrorNote>
         </div>
       )}
 
-      {/* Result */}
+      {/* Answer */}
       {result && (
-        <div className="mt-6 space-y-4">
-          <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
-            <h2 className="mb-3 font-mono text-xs uppercase tracking-widest text-accent-cyan">
-              {tr.answer}
-            </h2>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary">
-              {result.answer}
-            </p>
-            <p className="mt-3 font-mono text-xs text-text-muted">
-              {tr.modelLabel} {result.model}
-            </p>
-          </div>
-
-          {result.sources.length > 0 && (
-            <div className="rounded-lg border border-border bg-surface p-4 sm:p-6">
-              <h2 className="mb-3 font-mono text-xs uppercase tracking-widest text-accent-cyan">
-                {tr.retrievedSources} ({result.sources.length})
-              </h2>
-              <div className="space-y-3">
-                {result.sources.map((src, i) => (
-                  <div
-                    key={`${src.document_id}-${src.chunk_index}-${i}`}
-                    className="rounded-md border border-border bg-surface-2 p-3 sm:p-4"
-                  >
-                    <div className="mb-1 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px] text-text-muted">
-                      <span className="flex items-center gap-1.5">
-                        <FileText className="h-3 w-3" />
-                        <span className="text-text-secondary">{src.filename}</span>
-                        {src.page !== null && (
-                          <span>
-                            · {tr.pageLabel} {src.page}
-                          </span>
-                        )}
-                        <span>
-                          · {tr.chunkLabel} {src.chunk_index}
-                        </span>
-                      </span>
-                      <span className="text-accent-cyan">
-                        {tr.scoreLabel} {src.score.toFixed(3)}
-                      </span>
-                    </div>
-                    <p className="text-sm leading-relaxed text-text-secondary">{src.content}</p>
-                  </div>
-                ))}
+        <div className="mt-6 space-y-4" aria-live="polite">
+          <section className="rounded-lg border border-border bg-surface p-4 sm:p-6">
+            <h2 className="mb-3 text-base font-semibold text-text-primary">{tr.answer}</h2>
+            {noRelevant ? (
+              <p className="text-sm leading-relaxed text-text-secondary">{tr.noRelevant}</p>
+            ) : result.answer ? (
+              <div className="text-sm leading-relaxed text-text-primary">
+                <MarkdownContent
+                  text={linkCitations(result.answer, sources.length)}
+                  components={citationComponents}
+                />
+                {isQuerying && <span className="animate-cursor-blink text-accent">▍</span>}
               </div>
-            </div>
+            ) : (
+              isQuerying && (
+                <p className="flex items-center gap-2 text-sm text-text-muted">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {tr.querying}
+                </p>
+              )
+            )}
+            {result.model && !noRelevant && !isQuerying && (
+              <p className="mt-4 text-xs text-text-muted">
+                {tr.modelLabel} <span className="font-mono">{result.model}</span>
+              </p>
+            )}
+          </section>
+
+          {sources.length > 0 && (
+            <section className="rounded-lg border border-border bg-surface p-4 sm:p-6">
+              <h2 className="text-base font-semibold text-text-primary">{tr.retrievedSources}</h2>
+              <p className="mb-4 mt-1 text-xs text-text-muted">{tr.sourcesHint}</p>
+              <ol className="space-y-3">
+                {sources.map((src, i) => {
+                  const n = i + 1
+                  const pct = Math.round(src.score * 100)
+                  return (
+                    <li
+                      key={`${src.document_id}-${src.chunk_index}`}
+                      ref={(el) => {
+                        sourceRefs.current[n] = el
+                      }}
+                      className={`rounded-md border bg-surface-2 p-3 transition-colors sm:p-4 ${
+                        activeSource === n ? 'border-accent' : 'border-border'
+                      }`}
+                    >
+                      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                        <span className="rounded border border-accent/40 bg-accent/10 px-1.5 font-medium text-accent">
+                          {n}
+                        </span>
+                        <span className="min-w-0 truncate text-text-secondary">{src.filename}</span>
+                        <span className="text-text-muted">
+                          {src.page !== null
+                            ? `${tr.pageLabel} ${src.page}`
+                            : `${tr.chunkLabel} ${src.chunk_index}`}
+                        </span>
+                        <span className="ml-auto flex items-center gap-2 text-text-muted">
+                          <span
+                            className="h-1.5 w-16 overflow-hidden rounded-full bg-border"
+                            aria-hidden
+                          >
+                            <span
+                              className="block h-full rounded-full bg-accent"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </span>
+                          {pct}% {tr.similarity}
+                        </span>
+                      </div>
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">
+                        {src.content}
+                      </p>
+                    </li>
+                  )
+                })}
+              </ol>
+            </section>
           )}
         </div>
       )}
-    </div>
+    </DemoShell>
   )
 }

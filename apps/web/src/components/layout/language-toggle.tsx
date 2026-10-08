@@ -8,7 +8,7 @@ export function LanguageToggle({ className = '' }: { className?: string }) {
   const options: Locale[] = ['en', 'es']
   return (
     <div
-      className={`inline-flex overflow-hidden rounded-md border border-border font-mono text-xs ${className}`}
+      className={`inline-flex overflow-hidden rounded-md border border-border text-xs ${className}`}
       role="group"
       aria-label="Language"
     >
@@ -20,9 +20,9 @@ export function LanguageToggle({ className = '' }: { className?: string }) {
             type="button"
             onClick={() => setLocale(opt)}
             aria-pressed={active}
-            className={`px-2 py-1 transition-colors ${
+            className={`px-2.5 py-1.5 transition-colors ${
               active
-                ? 'bg-accent-green/15 text-accent-green'
+                ? 'bg-surface-2 font-medium text-text-primary'
                 : 'text-text-muted hover:text-text-primary'
             } ${i === 0 ? 'border-r border-border' : ''}`}
           >

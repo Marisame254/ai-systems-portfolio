@@ -1,31 +1,56 @@
 import type { Metadata, Viewport } from 'next'
-import { GeistSans } from 'geist/font/sans'
-import { GeistMono } from 'geist/font/mono'
+import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google'
 import './globals.css'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { LanguageProvider } from '@/lib/i18n/provider'
+import { site } from '@/lib/site'
 import { Analytics } from '@vercel/analytics/next'
 
+const plexSans = IBM_Plex_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-plex-sans',
+  display: 'swap',
+})
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-plex-mono',
+  display: 'swap',
+})
+
+const title = `${site.name} | ${site.role}`
 const description =
-  'AI Systems Engineer specializing in LangGraph, RAG systems, multi-agent architectures, and LLM applications.'
+  'AI systems engineer building LLM agents with LangGraph: tool-calling, retrieval over your documents, and long-term memory. Live demos included.'
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://marisame.dev'),
-  title: 'Marisame | AI Systems Engineer',
+  metadataBase: new URL(site.url),
+  title,
   description,
-  keywords: ['AI Engineer', 'LangGraph', 'RAG', 'Multi-agent', 'FastAPI', 'Next.js'],
+  authors: [{ name: site.name, url: site.url }],
+  keywords: [
+    site.name,
+    site.handle,
+    'AI Engineer',
+    'LangGraph',
+    'RAG',
+    'Multi-agent',
+    'FastAPI',
+    'Next.js',
+  ],
   openGraph: {
-    title: 'Marisame | AI Systems Engineer',
+    title,
     description,
-    siteName: 'Marisame',
+    siteName: site.name,
     type: 'website',
     locale: 'es_ES',
-    url: 'https://marisame.dev',
+    url: site.url,
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Marisame | AI Systems Engineer',
+    title,
     description,
   },
 }
@@ -33,7 +58,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0a0a0a',
+  themeColor: '#0c0e12',
 }
 
 export default function RootLayout({
@@ -42,11 +67,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="es" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body className="min-h-screen bg-background text-text-primary antialiased">
+    <html lang="es" className={`${plexSans.variable} ${plexMono.variable}`}>
+      <body className="flex min-h-screen flex-col bg-background font-sans text-text-primary antialiased">
         <LanguageProvider>
           <Navbar />
-          <main>{children}</main>
+          <main className="flex-1">{children}</main>
           <Footer />
         </LanguageProvider>
         <Analytics />

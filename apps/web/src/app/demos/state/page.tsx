@@ -6,38 +6,18 @@ import {
   getThreadHistory,
   getThreadState,
   listThreadsByIds,
-  type SerializedMessage,
   type ThreadHistory,
   type ThreadState,
   type ThreadSummary,
 } from '@/lib/api'
 import { loadThreadIds } from '@/lib/thread-store'
-import { MessageBubble, type ChatMessageView, type ToolCall } from '@/components/chat/message-bubble'
+import { MessageBubble } from '@/components/chat/message-bubble'
+import { DemoShell } from '@/components/demos/demo-shell'
+import { demoById } from '@/lib/demos'
+import { hydrateMessages } from '@/lib/messages'
 import { AlertCircle, Clock, Layers, Loader2, RotateCcw } from 'lucide-react'
 import { useLanguage } from '@/lib/i18n/provider'
 import type { Dictionary } from '@/lib/i18n'
-
-function hydrate(serialized: SerializedMessage[]): ChatMessageView[] {
-  const result: ChatMessageView[] = []
-  const toolResults = new Map<string, string>()
-  for (const m of serialized) if (m.type === 'tool' && m.tool_call_id) toolResults.set(m.tool_call_id, m.content)
-  for (const m of serialized) {
-    if (m.type === 'human') result.push({ role: 'user', content: m.content })
-    else if (m.type === 'ai') {
-      const calls: ToolCall[] = (m.tool_calls ?? []).map((tc) => ({
-        name: tc.name,
-        args: tc.args,
-        result: tc.id ? toolResults.get(tc.id) : undefined,
-      }))
-      result.push({
-        role: 'assistant',
-        content: m.content,
-        toolCalls: calls.length ? calls : undefined,
-      })
-    }
-  }
-  return result
-}
 
 function StatePageInner() {
   const router = useRouter()
@@ -91,26 +71,23 @@ function StatePageInner() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-      <div className="mb-5 sm:mb-6">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-accent-green sm:text-xs">
-          {ts.label}
-        </p>
-        <h1 className="text-xl font-bold text-text-primary sm:text-2xl">{ts.title}</h1>
-        <p className="text-xs text-text-secondary sm:text-sm">{ts.description}</p>
-      </div>
-
+    <DemoShell
+      title={ts.title}
+      description={ts.description}
+      stack={demoById('state').stack}
+      width="wide"
+    >
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <label className="font-mono text-xs text-text-muted">{ts.threadLabel}</label>
         <select
           value={activeThread}
           onChange={(e) => selectThread(e.target.value)}
-          className="min-w-0 max-w-full flex-1 rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-xs text-text-primary outline-none focus:border-accent-cyan/50 sm:flex-none"
+          className="min-w-0 max-w-full flex-1 rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-xs text-text-primary outline-none focus:border-accent/50 sm:flex-none"
         >
           {threads.length === 0 && <option value="">{ts.noThreads}</option>}
           {threads.map((th) => (
             <option key={th.thread_id} value={th.thread_id}>
-              {(th.title || th.thread_id.slice(0, 8)) + ' — ' + th.thread_id.slice(0, 8)}
+              {(th.title || th.thread_id.slice(0, 8)) + ' (' + th.thread_id.slice(0, 8) + ')'}
             </option>
           ))}
         </select>
@@ -119,7 +96,7 @@ function StatePageInner() {
           <button
             onClick={() => setTab('state')}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded px-3 py-1.5 font-mono text-xs transition-colors sm:flex-none ${
-              tab === 'state' ? 'bg-accent-cyan/10 text-accent-cyan' : 'text-text-muted hover:text-text-primary'
+              tab === 'state' ? 'bg-accent/10 text-accent' : 'text-text-muted hover:text-text-primary'
             }`}
           >
             <Layers className="h-3 w-3" />
@@ -128,7 +105,7 @@ function StatePageInner() {
           <button
             onClick={() => setTab('history')}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded px-3 py-1.5 font-mono text-xs transition-colors sm:flex-none ${
-              tab === 'history' ? 'bg-accent-cyan/10 text-accent-cyan' : 'text-text-muted hover:text-text-primary'
+              tab === 'history' ? 'bg-accent/10 text-accent' : 'text-text-muted hover:text-text-primary'
             }`}
           >
             <Clock className="h-3 w-3" />
@@ -142,12 +119,12 @@ function StatePageInner() {
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
           <div>
             <p className="text-red-400">{ts.errorTitle}</p>
-            <p className="mt-1 text-text-muted/60">{error}</p>
+            <p className="mt-1 text-text-secondary">{error}</p>
           </div>
         </div>
       ) : loading ? (
         <div className="flex items-center gap-2 font-mono text-xs text-text-muted">
-          <Loader2 className="h-4 w-4 animate-spin text-accent-green" />
+          <Loader2 className="h-4 w-4 animate-spin text-accent" />
           {ts.loading}
         </div>
       ) : tab === 'state' ? (
@@ -155,7 +132,7 @@ function StatePageInner() {
       ) : (
         <HistoryView history={history} ts={ts} threadId={activeThread} router={router} />
       )}
-    </div>
+    </DemoShell>
   )
 }
 
@@ -167,11 +144,11 @@ function StateView({
   ts: Dictionary['stateDemo']
 }) {
   if (!state) return <p className="font-mono text-xs text-text-muted">{ts.empty}</p>
-  const messages = hydrate(state.values.messages)
+  const messages = hydrateMessages(state.values.messages)
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr,18rem]">
       <div className="rounded-lg border border-border bg-surface p-4">
-        <p className="mb-3 font-mono text-xs uppercase tracking-wider text-text-muted">
+        <p className="mb-3 font-mono text-xs text-text-muted">
           {ts.messagesLabel(state.values.messages.length)}
         </p>
         {messages.length === 0 ? (
@@ -183,24 +160,24 @@ function StateView({
 
       <aside className="space-y-3 rounded-lg border border-border bg-surface p-4 text-xs">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
+          <p className="font-mono text-xs text-text-muted">
             {ts.nextNodes}
           </p>
-          <p className="mt-1 font-mono text-accent-cyan">
+          <p className="mt-1 font-mono text-accent">
             {state.next.length ? state.next.join(', ') : ts.terminal}
           </p>
         </div>
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
+          <p className="font-mono text-xs text-text-muted">
             {ts.checkpointId}
           </p>
-          <p className="mt-1 break-all font-mono text-[10px] text-text-secondary">
+          <p className="mt-1 break-all font-mono text-xs text-text-secondary">
             {state.checkpoint_id ?? '—'}
           </p>
         </div>
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">{ts.created}</p>
-          <p className="mt-1 font-mono text-[10px] text-text-secondary">
+          <p className="font-mono text-xs text-text-muted">{ts.created}</p>
+          <p className="mt-1 font-mono text-xs text-text-secondary">
             {state.created_at ?? '—'}
           </p>
         </div>
@@ -254,7 +231,7 @@ function CheckpointCard({
   router: ReturnType<typeof useRouter>
 }) {
   const [open, setOpen] = useState(false)
-  const messages = hydrate(cp.values.messages)
+  const messages = hydrateMessages(cp.values.messages)
   const canRewind = !!cp.checkpoint_id && cp.values.messages.length > 0
 
   function handleRewind(e: React.MouseEvent) {
@@ -274,21 +251,21 @@ function CheckpointCard({
           onClick={() => setOpen((v) => !v)}
           className="flex flex-1 items-center gap-3 text-left hover:text-text-primary"
         >
-          <span className="rounded bg-accent-cyan/10 px-2 py-0.5 text-accent-cyan">
+          <span className="rounded bg-accent/10 px-2 py-0.5 text-accent">
             #{index}
           </span>
           <span className="text-text-secondary">
             {cp.values.messages.length} {ts.msgs} · {ts.next}:{' '}
             {cp.next.length ? cp.next.join(',') : '∅'}
           </span>
-          <span className="ml-auto text-[10px] text-text-muted">{cp.created_at ?? ''}</span>
+          <span className="ml-auto text-xs text-text-muted">{cp.created_at ?? ''}</span>
         </button>
         <button
           onClick={handleRewind}
           disabled={!canRewind}
           aria-label={ts.rewindAria}
           title={canRewind ? ts.rewindAria : ts.rewindDisabled}
-          className="ml-2 flex shrink-0 items-center gap-1 rounded-md border border-accent-green/30 bg-accent-green/5 px-2 py-1 font-mono text-[11px] text-accent-green transition-colors hover:bg-accent-green/15 disabled:cursor-not-allowed disabled:border-border disabled:bg-transparent disabled:text-text-muted/40"
+          className="ml-2 flex shrink-0 items-center gap-1 rounded-md border border-accent/30 bg-accent/5 px-2 py-1 font-mono text-xs text-accent transition-colors hover:bg-accent/15 disabled:cursor-not-allowed disabled:border-border disabled:bg-transparent disabled:text-text-muted/40"
         >
           <RotateCcw className="h-3 w-3" />
           <span className="hidden sm:inline">{ts.rewindHere}</span>
@@ -309,7 +286,7 @@ function CheckpointCard({
 
 export default function StatePage() {
   return (
-    <Suspense fallback={<div className="p-6 font-mono text-xs text-text-muted">loading…</div>}>
+    <Suspense fallback={<div className="p-6 text-sm text-text-muted">…</div>}>
       <StatePageInner />
     </Suspense>
   )

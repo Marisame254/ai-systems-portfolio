@@ -1,57 +1,167 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
-import { TerminalHero } from '@/components/layout/terminal-hero'
+import { AgentGraphFigure } from '@/components/layout/agent-graph-figure'
 import { DemoCard } from '@/components/demos/demo-card'
-import { demos } from '@/lib/demos'
+import { StackChips } from '@/components/demos/demo-shell'
+import { demoById, demos } from '@/lib/demos'
 import { useLanguage } from '@/lib/i18n/provider'
+import { site } from '@/lib/site'
+
+const buildOrder = ['chat', 'rag', 'memory'] as const
+
+const projects = [
+  { key: 'enterpriseRag', tech: ['FastAPI', 'LangGraph SDK', 'pgvector', 'fastapi-mcp'] },
+  { key: 'lyra', tech: ['Python', 'DeepAgents', 'MCP', 'PostgreSQL'] },
+  { key: 'mcpServers', tech: ['LangGraph', 'Chainlit', 'MCP'] },
+] as const
+
+const primaryButton =
+  'inline-flex items-center justify-center rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-background transition-opacity hover:opacity-90'
+const secondaryButton =
+  'inline-flex items-center justify-center rounded-md border border-border px-5 py-2.5 text-sm font-medium text-text-primary transition-colors hover:border-text-muted'
 
 export default function HomePage() {
   const { t } = useLanguage()
+  const h = t.home
+
   return (
-    <div className="min-h-screen">
-      {/* Hero Section */}
-      <section className="relative flex min-h-[80vh] flex-col items-center justify-center overflow-hidden px-4 py-12 sm:min-h-[90vh] sm:px-6">
-        {/* Grid background */}
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage:
-              'linear-gradient(#00ff88 1px, transparent 1px), linear-gradient(90deg, #00ff88 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
-          }}
-        />
-        <TerminalHero />
-        <div className="mt-10 flex w-full max-w-md flex-col gap-3 sm:mt-12 sm:max-w-none sm:flex-row sm:flex-wrap sm:justify-center sm:gap-4">
-          <Link
-            href="/cv"
-            className="flex items-center justify-center gap-2 rounded-md border border-accent-green/50 bg-accent-green/10 px-6 py-3 text-sm font-medium text-accent-green transition-all hover:bg-accent-green/20 hover:shadow-glow-green"
-          >
-            {t.home.viewCv} <ArrowRight className="h-4 w-4" />
-          </Link>
-          <Link
-            href="/demos"
-            className="flex items-center justify-center gap-2 rounded-md border border-border px-6 py-3 text-sm font-medium text-text-secondary transition-all hover:border-accent-cyan/50 hover:text-accent-cyan"
-          >
-            {t.home.exploreDemos}
-          </Link>
+    <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      {/* Hero */}
+      <section className="grid items-center gap-10 py-14 sm:py-20 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-16">
+        <div>
+          <h1 className="text-4xl font-semibold tracking-tight text-text-primary sm:text-6xl">
+            {site.name}
+          </h1>
+          <p className="mt-3 text-xl text-accent sm:text-2xl">{h.role}</p>
+          <p className="mt-6 max-w-xl text-base leading-relaxed text-text-secondary sm:text-lg">
+            {h.pitch}
+          </p>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <Link href="/demos" className={primaryButton}>
+              {h.primaryCta}
+            </Link>
+            <Link href="/cv" className={secondaryButton}>
+              {h.secondaryCta}
+            </Link>
+          </div>
+          <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            <li>
+              <a
+                href={`mailto:${site.email}`}
+                className="text-text-secondary underline-offset-4 hover:text-text-primary hover:underline"
+              >
+                {site.email}
+              </a>
+            </li>
+            <li>
+              <a
+                href={site.github}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-text-secondary underline-offset-4 hover:text-text-primary hover:underline"
+              >
+                {site.githubLabel}
+              </a>
+            </li>
+            {site.linkedin && (
+              <li>
+                <a
+                  href={site.linkedin}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-text-secondary underline-offset-4 hover:text-text-primary hover:underline"
+                >
+                  LinkedIn
+                </a>
+              </li>
+            )}
+          </ul>
+        </div>
+
+        <figure className="mx-auto w-full max-w-[22rem] rounded-lg border border-border bg-surface/50 p-5">
+          <AgentGraphFigure label={h.graphAlt} />
+          <figcaption className="mt-4 border-t border-border pt-4 text-sm text-text-secondary">
+            {h.graphCaption}{' '}
+            <Link
+              href="/demos/agents"
+              className="font-medium text-accent underline-offset-4 hover:underline"
+            >
+              {h.graphLink}
+            </Link>
+          </figcaption>
+        </figure>
+      </section>
+
+      {/* What I build */}
+      <section className="border-t border-border py-14 sm:py-16">
+        <h2 className="text-2xl font-semibold tracking-tight text-text-primary">{h.buildTitle}</h2>
+        <div className="mt-6 divide-y divide-border border-y border-border">
+          {buildOrder.map((id) => {
+            const item = h.build[id]
+            return (
+              <div key={id} className="grid gap-2 py-6 md:grid-cols-[18rem_minmax(0,1fr)_auto] md:gap-8">
+                <h3 className="text-base font-semibold text-text-primary">{item.title}</h3>
+                <p className="max-w-xl text-sm leading-relaxed text-text-secondary">{item.body}</p>
+                <Link
+                  href={demoById(id).href}
+                  className="text-sm font-medium text-accent underline-offset-4 hover:underline md:text-right"
+                >
+                  {item.link}
+                </Link>
+              </div>
+            )
+          })}
         </div>
       </section>
 
-      {/* Demo Cards Section */}
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
-        <p className="mb-2 font-mono text-xs uppercase tracking-widest text-accent-green sm:text-sm">
-          {t.home.liveDemosLabel}
-        </p>
-        <h2 className="mb-8 text-2xl font-bold text-text-primary sm:mb-12 sm:text-3xl">
-          {t.home.sectionTitle}
-        </h2>
-        <div className="grid gap-6 sm:grid-cols-2">
+      {/* Demos */}
+      <section className="border-t border-border py-14 sm:py-16">
+        <h2 className="text-2xl font-semibold tracking-tight text-text-primary">{h.demosTitle}</h2>
+        <p className="mt-2 text-sm text-text-secondary sm:text-base">{h.demosIntro}</p>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {demos.map((demo) => (
-            <DemoCard key={demo.href} {...demo} />
+            <DemoCard key={demo.id} {...demo} />
           ))}
         </div>
+      </section>
+
+      {/* Selected work */}
+      <section className="border-t border-border py-14 sm:py-16">
+        <h2 className="text-2xl font-semibold tracking-tight text-text-primary">{h.workTitle}</h2>
+        <div className="mt-6 divide-y divide-border border-y border-border">
+          {projects.map((p) => {
+            const copy = t.cv.projects[p.key]
+            return (
+              <div key={p.key} className="grid gap-3 py-6 md:grid-cols-[18rem_minmax(0,1fr)] md:gap-8">
+                <h3 className="text-base font-semibold text-text-primary">{copy.name}</h3>
+                <div>
+                  <p className="max-w-2xl text-sm leading-relaxed text-text-secondary">
+                    {copy.description}
+                  </p>
+                  <StackChips items={[...p.tech]} className="mt-3" />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        <Link
+          href="/cv"
+          className="mt-6 inline-block text-sm font-medium text-accent underline-offset-4 hover:underline"
+        >
+          {h.workLink}
+        </Link>
+      </section>
+
+      {/* Contact */}
+      <section className="border-t border-border py-14 sm:py-16">
+        <h2 className="text-2xl font-semibold tracking-tight text-text-primary">{h.contactTitle}</h2>
+        <p className="mt-2 max-w-xl text-sm leading-relaxed text-text-secondary sm:text-base">
+          {h.contactBody}
+        </p>
+        <a href={`mailto:${site.email}`} className={`${primaryButton} mt-6`}>
+          {h.emailCta}
+        </a>
       </section>
     </div>
   )

@@ -1,8 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import { Bot, ChevronDown, ChevronRight, Search, User } from 'lucide-react'
+import ReactMarkdown, { type Components } from 'react-markdown'
+import {
+  Bot,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  FileSearch,
+  Globe,
+  User,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react'
 
 export interface ToolCall {
   name: string
@@ -16,99 +26,96 @@ export interface ChatMessageView {
   toolCalls?: ToolCall[]
 }
 
-const markdownComponents = {
-  p: (props: React.HTMLAttributes<HTMLParagraphElement>) => (
-    <p className="mb-2 last:mb-0" {...props} />
-  ),
-  ul: (props: React.HTMLAttributes<HTMLUListElement>) => (
-    <ul className="mb-2 ml-5 list-disc space-y-1 last:mb-0" {...props} />
-  ),
-  ol: (props: React.HTMLAttributes<HTMLOListElement>) => (
-    <ol className="mb-2 ml-5 list-decimal space-y-1 last:mb-0" {...props} />
-  ),
-  li: (props: React.HTMLAttributes<HTMLLIElement>) => <li className="leading-relaxed" {...props} />,
-  a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+const markdownComponents: Components = {
+  p: (props) => <p className="mb-2 last:mb-0" {...props} />,
+  ul: (props) => <ul className="mb-2 ml-5 list-disc space-y-1 last:mb-0" {...props} />,
+  ol: (props) => <ol className="mb-2 ml-5 list-decimal space-y-1 last:mb-0" {...props} />,
+  li: (props) => <li className="leading-relaxed" {...props} />,
+  a: (props) => (
     <a
-      className="text-accent-cyan underline-offset-2 hover:underline"
+      className="text-accent underline underline-offset-2"
       target="_blank"
       rel="noreferrer"
       {...props}
     />
   ),
-  strong: (props: React.HTMLAttributes<HTMLElement>) => (
-    <strong className="font-semibold text-text-primary" {...props} />
-  ),
-  em: (props: React.HTMLAttributes<HTMLElement>) => <em className="italic" {...props} />,
-  h1: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h1 className="mb-2 mt-3 text-base font-semibold text-text-primary" {...props} />
-  ),
-  h2: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h2 className="mb-2 mt-3 text-sm font-semibold text-text-primary" {...props} />
-  ),
-  h3: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h3 className="mb-1 mt-2 text-sm font-semibold text-text-secondary" {...props} />
-  ),
-  code: ({
-    inline,
-    className,
-    children,
-    ...props
-  }: React.HTMLAttributes<HTMLElement> & { inline?: boolean }) => {
-    if (inline) {
-      return (
-        <code
-          className="rounded bg-surface px-1.5 py-0.5 font-mono text-[0.85em] text-accent-green"
-          {...props}
-        >
-          {children}
-        </code>
-      )
-    }
-    return (
-      <code className={`font-mono text-xs ${className ?? ''}`} {...props}>
-        {children}
-      </code>
-    )
-  },
-  pre: (props: React.HTMLAttributes<HTMLPreElement>) => (
-    <pre
-      className="my-2 overflow-x-auto rounded-md border border-border bg-[#0a0a0a] p-3 text-xs leading-relaxed"
+  strong: (props) => <strong className="font-semibold text-text-primary" {...props} />,
+  em: (props) => <em className="italic" {...props} />,
+  h1: (props) => <h1 className="mb-2 mt-3 text-base font-semibold text-text-primary" {...props} />,
+  h2: (props) => <h2 className="mb-2 mt-3 text-sm font-semibold text-text-primary" {...props} />,
+  h3: (props) => <h3 className="mb-1 mt-2 text-sm font-semibold text-text-secondary" {...props} />,
+  // Inline code by default; the `pre` wrapper below resets these styles for fenced blocks.
+  code: ({ className, ...props }) => (
+    <code
+      className={`rounded bg-background px-1.5 py-0.5 font-mono text-[0.85em] text-text-primary ${className ?? ''}`}
       {...props}
     />
   ),
-  blockquote: (props: React.HTMLAttributes<HTMLQuoteElement>) => (
+  pre: (props) => (
+    <pre
+      className="my-2 overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs leading-relaxed [&>code]:bg-transparent [&>code]:p-0 [&>code]:text-xs"
+      {...props}
+    />
+  ),
+  blockquote: (props) => (
     <blockquote
-      className="my-2 border-l-2 border-accent-green/40 pl-3 italic text-text-secondary"
+      className="my-2 border-l-2 border-border pl-3 text-text-secondary"
       {...props}
     />
   ),
 }
 
-function MarkdownContent({ text }: { text: string }) {
-  return <ReactMarkdown components={markdownComponents}>{text}</ReactMarkdown>
+export function MarkdownContent({
+  text,
+  components,
+}: {
+  text: string
+  components?: Components
+}) {
+  return (
+    <ReactMarkdown components={components ? { ...markdownComponents, ...components } : markdownComponents}>
+      {text}
+    </ReactMarkdown>
+  )
+}
+
+const TOOL_ICONS: Record<string, LucideIcon> = {
+  search_user_documents: FileSearch,
+  tavily_search: Globe,
+  get_current_datetime: Clock,
+}
+
+function toolArgsPreview(args: unknown): string {
+  if (typeof args !== 'object' || args === null) return args == null ? '' : String(args)
+  const record = args as Record<string, unknown>
+  if (typeof record.query === 'string') return record.query
+  return Object.keys(record).length ? JSON.stringify(record) : ''
 }
 
 function ToolCallChip({ call }: { call: ToolCall }) {
   const [open, setOpen] = useState(false)
-  const query =
-    typeof call.args === 'object' && call.args !== null && 'query' in call.args
-      ? String((call.args as Record<string, unknown>).query)
-      : JSON.stringify(call.args)
+  const Icon = TOOL_ICONS[call.name] ?? Wrench
+  const preview = toolArgsPreview(call.args)
 
   return (
-    <div className="mb-2 rounded-md border border-accent-cyan/30 bg-accent-cyan/5 font-mono text-xs">
+    <div className="mb-2 rounded-md border border-node-tool/30 bg-node-tool/5 text-xs">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-accent-cyan transition-colors hover:bg-accent-cyan/10"
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-node-tool/10"
       >
-        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        <Search className="h-3 w-3" />
-        <span className="font-semibold">{call.name}</span>
-        <span className="truncate text-text-secondary">&quot;{query}&quot;</span>
-        {!call.result && <span className="ml-auto animate-pulse text-text-muted">...</span>}
+        {open ? (
+          <ChevronDown className="h-3 w-3 shrink-0 text-text-muted" />
+        ) : (
+          <ChevronRight className="h-3 w-3 shrink-0 text-text-muted" />
+        )}
+        <Icon className="h-3.5 w-3.5 shrink-0 text-node-tool" />
+        <span className="shrink-0 font-mono font-medium text-node-tool">{call.name}</span>
+        {preview && <span className="truncate text-text-secondary">{preview}</span>}
+        {!call.result && <span className="ml-auto animate-pulse text-text-muted">…</span>}
       </button>
       {open && call.result && (
-        <pre className="max-h-48 overflow-auto border-t border-accent-cyan/20 px-3 py-2 text-[11px] leading-relaxed text-text-secondary">
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap border-t border-node-tool/20 px-3 py-2 font-mono text-xs leading-relaxed text-text-secondary">
           {call.result}
         </pre>
       )}
@@ -123,36 +130,33 @@ export function MessageBubble({
   msg: ChatMessageView
   isStreaming?: boolean
 }) {
+  const isUser = msg.role === 'user'
   return (
-    <div className={`mb-4 flex gap-2 sm:gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+    <div className={`mb-4 flex gap-2 sm:gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
       <div
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md sm:h-8 sm:w-8 ${
-          msg.role === 'user'
-            ? 'bg-accent-cyan/10 text-accent-cyan'
-            : 'bg-accent-green/10 text-accent-green'
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
+          isUser ? 'bg-surface-2 text-text-secondary' : 'bg-accent/10 text-accent'
         }`}
       >
-        {msg.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
       <div
-        className={`min-w-0 max-w-[88%] rounded-lg px-3 py-2.5 text-sm leading-relaxed sm:max-w-[80%] sm:px-4 sm:py-3 ${
-          msg.role === 'user'
-            ? 'bg-accent-cyan/10 text-text-primary'
-            : 'bg-surface-2 text-text-primary'
+        className={`min-w-0 max-w-[88%] rounded-lg px-3 py-2.5 text-sm leading-relaxed text-text-primary sm:max-w-[80%] sm:px-4 sm:py-3 ${
+          isUser ? 'whitespace-pre-wrap bg-accent/10' : 'bg-surface-2'
         }`}
       >
         {msg.toolCalls?.map((call, j) => <ToolCallChip key={j} call={call} />)}
         {msg.content ? (
-          msg.role === 'assistant' ? (
-            <MarkdownContent text={msg.content} />
-          ) : (
+          isUser ? (
             msg.content
+          ) : (
+            <MarkdownContent text={msg.content} />
           )
         ) : !msg.toolCalls?.length ? (
-          <span className="text-text-muted">...</span>
+          <span className="text-text-muted">…</span>
         ) : null}
-        {isStreaming && msg.role === 'assistant' && (
-          <span className="ml-0.5 animate-cursor-blink text-accent-green">█</span>
+        {isStreaming && !isUser && (
+          <span className="ml-0.5 animate-cursor-blink text-accent">▍</span>
         )}
       </div>
     </div>

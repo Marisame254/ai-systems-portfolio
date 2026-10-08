@@ -6,39 +6,48 @@ export interface ChatInfo {
   environment: 'dev' | 'prod'
 }
 
+/** Thrown for any non-2xx response; `message` is the API's `detail` when it sent one. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
+async function ensureOk(res: Response): Promise<Response> {
+  if (res.ok) return res
+  let message = `API error: ${res.status}`
+  try {
+    const data = await res.json()
+    if (typeof data?.detail === 'string') message = data.detail
+    // FastAPI validation errors: detail is a list of { msg, loc }.
+    else if (Array.isArray(data?.detail) && typeof data.detail[0]?.msg === 'string')
+      message = data.detail[0].msg
+  } catch {
+    /* body was not JSON */
+  }
+  throw new ApiError(message, res.status)
+}
+
 export async function getChatInfo(): Promise<ChatInfo> {
-  const res = await fetch(`${API_BASE}/api/chat/info`)
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  const res = await ensureOk(await fetch(`${API_BASE}/api/chat/info`))
   return res.json()
 }
+
+export type GraphNodeName = 'load_memory' | 'agent' | 'tools' | 'save_memory'
 
 export type ChatStreamEvent =
   | { type: 'token'; text: string }
   | { type: 'tool_call'; name: string; args: unknown }
   | { type: 'tool_result'; name: string; result: string }
+  | { type: 'node'; name: GraphNodeName; status: 'start' | 'end' }
   | { type: 'error'; message: string }
 
-export async function* streamChat(
-  message: string,
-  threadId: string,
-  userId?: string,
-  opts?: { checkpointId?: string; signal?: AbortSignal }
-): AsyncGenerator<ChatStreamEvent> {
-  const body: Record<string, unknown> = {
-    message,
-    thread_id: threadId,
-    user_id: userId,
-  }
-  if (opts?.checkpointId) body.checkpoint_id = opts.checkpointId
-
-  const res = await fetch(`${API_BASE}/api/chat/stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: opts?.signal,
-  })
-
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+/** Reads a `data: {json}\n\n` event stream until `[DONE]` or the body ends. */
+async function* readSSE<T>(res: Response): AsyncGenerator<T> {
   if (!res.body) throw new Error('No response body')
 
   const reader = res.body.getReader()
@@ -59,7 +68,7 @@ export async function* streamChat(
         const data = frame.slice(6)
         if (data === '[DONE]') return
         try {
-          yield JSON.parse(data) as ChatStreamEvent
+          yield JSON.parse(data) as T
         } catch {
           // ignore malformed frames
         }
@@ -69,6 +78,30 @@ export async function* streamChat(
     // Releases the stream when the consumer breaks early (unmount, new send, abort).
     reader.cancel().catch(() => {})
   }
+}
+
+export async function* streamChat(
+  message: string,
+  threadId: string,
+  userId?: string,
+  opts?: { checkpointId?: string; signal?: AbortSignal }
+): AsyncGenerator<ChatStreamEvent> {
+  const body: Record<string, unknown> = {
+    message,
+    thread_id: threadId,
+    user_id: userId,
+  }
+  if (opts?.checkpointId) body.checkpoint_id = opts.checkpointId
+
+  const res = await ensureOk(
+    await fetch(`${API_BASE}/api/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: opts?.signal,
+    }),
+  )
+  yield* readSSE<ChatStreamEvent>(res)
 }
 
 // === RAG ===
@@ -112,25 +145,15 @@ export interface RAGQueryResponse {
   model: string
 }
 
-async function parseError(res: Response): Promise<string> {
-  try {
-    const data = await res.json()
-    if (typeof data?.detail === 'string') return data.detail
-  } catch {
-    /* ignore */
-  }
-  return `API error: ${res.status}`
-}
-
 export async function getRAGInfo(): Promise<RAGInfo> {
-  const res = await fetch(`${API_BASE}/api/rag/info`)
-  if (!res.ok) throw new Error(await parseError(res))
+  const res = await ensureOk(await fetch(`${API_BASE}/api/rag/info`))
   return res.json()
 }
 
 export async function listDocuments(userId: string): Promise<DocumentListResponse> {
-  const res = await fetch(`${API_BASE}/api/rag/documents?user_id=${encodeURIComponent(userId)}`)
-  if (!res.ok) throw new Error(await parseError(res))
+  const res = await ensureOk(
+    await fetch(`${API_BASE}/api/rag/documents?user_id=${encodeURIComponent(userId)}`),
+  )
   return res.json()
 }
 
@@ -138,39 +161,49 @@ export async function uploadDocument(file: File, userId: string): Promise<Docume
   const formData = new FormData()
   formData.append('file', file)
   formData.append('user_id', userId)
-  const res = await fetch(`${API_BASE}/api/rag/upload`, {
-    method: 'POST',
-    body: formData,
-  })
-  if (!res.ok) throw new Error(await parseError(res))
+  const res = await ensureOk(
+    await fetch(`${API_BASE}/api/rag/upload`, {
+      method: 'POST',
+      body: formData,
+    }),
+  )
   return res.json()
 }
 
 export async function deleteDocument(userId: string, docId: string): Promise<void> {
-  const res = await fetch(
-    `${API_BASE}/api/rag/documents/${encodeURIComponent(docId)}?user_id=${encodeURIComponent(userId)}`,
-    { method: 'DELETE' },
+  await ensureOk(
+    await fetch(
+      `${API_BASE}/api/rag/documents/${encodeURIComponent(docId)}?user_id=${encodeURIComponent(userId)}`,
+      { method: 'DELETE' },
+    ),
   )
-  if (!res.ok) throw new Error(await parseError(res))
 }
 
-export async function queryRAG(
+export type RAGStreamEvent =
+  // Always first. An empty list means nothing was relevant enough; no tokens follow.
+  | { type: 'sources'; sources: RAGSource[]; model: string }
+  | { type: 'token'; text: string }
+  | { type: 'error'; message: string }
+
+export async function* streamRAGQuery(
   query: string,
   userId: string,
-  opts?: { filename?: string; topK?: number },
-): Promise<RAGQueryResponse> {
-  const res = await fetch(`${API_BASE}/api/rag/query`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query,
-      user_id: userId,
-      filename: opts?.filename ?? null,
-      top_k: opts?.topK ?? 4,
+  opts?: { filename?: string; topK?: number; signal?: AbortSignal },
+): AsyncGenerator<RAGStreamEvent> {
+  const res = await ensureOk(
+    await fetch(`${API_BASE}/api/rag/query/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query,
+        user_id: userId,
+        filename: opts?.filename ?? null,
+        top_k: opts?.topK ?? 4,
+      }),
+      signal: opts?.signal,
     }),
-  })
-  if (!res.ok) throw new Error(await parseError(res))
-  return res.json()
+  )
+  yield* readSSE<RAGStreamEvent>(res)
 }
 
 export interface AgentGraphToolInfo {
@@ -207,7 +240,7 @@ export interface AgentGraph {
 
 export async function getAgentGraph(): Promise<AgentGraph> {
   const res = await fetch(`${API_BASE}/api/agents/graph`)
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  await ensureOk(res)
   return res.json()
 }
 
@@ -254,24 +287,24 @@ export async function listThreadsByIds(ids: string[]): Promise<ThreadSummary[]> 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ thread_ids: ids }),
   })
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  await ensureOk(res)
   return res.json()
 }
 
 export async function deleteThread(threadId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/api/agents/threads/${threadId}`, { method: 'DELETE' })
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  await ensureOk(res)
 }
 
 export async function getThreadState(threadId: string): Promise<ThreadState> {
   const res = await fetch(`${API_BASE}/api/agents/state/${threadId}`)
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  await ensureOk(res)
   return res.json()
 }
 
 export async function getThreadHistory(threadId: string): Promise<ThreadHistory> {
   const res = await fetch(`${API_BASE}/api/agents/state/${threadId}/history`)
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  await ensureOk(res)
   return res.json()
 }
 
@@ -282,7 +315,7 @@ export async function getThreadStateAtCheckpoint(
   const res = await fetch(
     `${API_BASE}/api/agents/state/${threadId}/checkpoint/${checkpointId}`,
   )
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  await ensureOk(res)
   return res.json()
 }
 
@@ -302,7 +335,7 @@ export interface MemoryListResponse {
 
 export async function listMemories(userId: string): Promise<MemoryListResponse> {
   const res = await fetch(`${API_BASE}/api/memory/${encodeURIComponent(userId)}`)
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  await ensureOk(res)
   return res.json()
 }
 
@@ -312,7 +345,7 @@ export async function addMemory(userId: string, text: string): Promise<MemoryEnt
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
   })
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  await ensureOk(res)
   return res.json()
 }
 
@@ -321,13 +354,13 @@ export async function deleteMemory(userId: string, key: string): Promise<void> {
     `${API_BASE}/api/memory/${encodeURIComponent(userId)}/${encodeURIComponent(key)}`,
     { method: 'DELETE' }
   )
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  await ensureOk(res)
 }
 
 export async function clearMemories(userId: string): Promise<{ deleted: number }> {
   const res = await fetch(`${API_BASE}/api/memory/${encodeURIComponent(userId)}`, {
     method: 'DELETE',
   })
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  await ensureOk(res)
   return res.json()
 }

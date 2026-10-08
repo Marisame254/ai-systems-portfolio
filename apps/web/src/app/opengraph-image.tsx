@@ -1,9 +1,17 @@
 import { ImageResponse } from 'next/og'
+import { site } from '@/lib/site'
 
 export const runtime = 'edge'
-export const alt = 'Marisame — AI Systems Engineer'
+export const alt = `${site.name} | ${site.role}`
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
+
+const nodes = [
+  { label: 'load_memory', color: '#e3b341' },
+  { label: 'agent', color: '#6cb6ff' },
+  { label: 'tools', color: '#b392f0' },
+  { label: 'save_memory', color: '#e3b341' },
+]
 
 export default function Image() {
   return new ImageResponse(
@@ -14,64 +22,51 @@ export default function Image() {
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'center',
+          justifyContent: 'space-between',
           padding: '80px',
-          background: '#0a0a0a',
-          backgroundImage:
-            'radial-gradient(circle at 85% 15%, rgba(0,255,136,0.12), transparent 45%), radial-gradient(circle at 10% 90%, rgba(0,213,255,0.10), transparent 45%)',
+          background: '#0c0e12',
           fontFamily: 'sans-serif',
         }}
       >
-        <div
-          style={{
-            fontSize: 120,
-            fontWeight: 800,
-            letterSpacing: '-0.04em',
-            backgroundImage: 'linear-gradient(90deg, #00ff88, #00d5ff)',
-            backgroundClip: 'text',
-            color: 'transparent',
-            lineHeight: 1,
-          }}
-        >
-          Marisame
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div
+            style={{
+              fontSize: 104,
+              fontWeight: 700,
+              letterSpacing: '-0.03em',
+              color: '#e6e8ec',
+              lineHeight: 1,
+            }}
+          >
+            {site.name}
+          </div>
+          <div style={{ marginTop: 24, fontSize: 48, color: '#58d1a0' }}>{site.role}</div>
+          <div style={{ marginTop: 28, fontSize: 30, color: '#a3aab8', maxWidth: 900 }}>
+            LLM agents with tools, retrieval and memory. Live demos on LangGraph and FastAPI.
+          </div>
         </div>
-        <div
-          style={{
-            marginTop: 24,
-            fontSize: 52,
-            fontWeight: 600,
-            color: '#fafafa',
-          }}
-        >
-          AI Systems Engineer
-        </div>
-        <div
-          style={{
-            marginTop: 40,
-            fontSize: 30,
-            fontWeight: 500,
-            color: '#00ff88',
-          }}
-        >
-          LangGraph · RAG · Multi-agent
-        </div>
-        <div
-          style={{
-            marginTop: 56,
-            display: 'flex',
-            alignItems: 'center',
-            alignSelf: 'flex-start',
-            gap: 14,
-            padding: '20px 40px',
-            borderRadius: 9999,
-            fontSize: 32,
-            fontWeight: 700,
-            color: '#0a0a0a',
-            backgroundImage: 'linear-gradient(90deg, #00ff88, #00d5ff)',
-          }}
-        >
-          Explore live demos
-          <span style={{ fontSize: 36 }}>→</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+          {nodes.map((node, i) => (
+            <div key={node.label} style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  padding: '14px 26px',
+                  borderRadius: 10,
+                  border: `2px solid ${node.color}`,
+                  background: '#13161c',
+                  color: node.color,
+                  fontSize: 28,
+                  fontFamily: 'monospace',
+                }}
+              >
+                {node.label}
+              </div>
+              {i < nodes.length - 1 && (
+                <div style={{ display: 'flex', width: 44, height: 2, background: '#4a5262' }} />
+              )}
+            </div>
+          ))}
         </div>
       </div>
     ),

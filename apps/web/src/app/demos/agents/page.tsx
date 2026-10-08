@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -13,102 +13,128 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import Link from 'next/link'
-import { getAgentGraph, type AgentGraph, type AgentGraphNode } from '@/lib/api'
+import {
+  ApiError,
+  deleteThread,
+  getAgentGraph,
+  streamChat,
+  type AgentGraph,
+  type AgentGraphNode,
+} from '@/lib/api'
+import { getUserId } from '@/lib/user'
+import { demoById } from '@/lib/demos'
 import { useLanguage } from '@/lib/i18n/provider'
 import type { Dictionary } from '@/lib/i18n'
-import {
-  AlertCircle,
-  Activity,
-  Loader2,
-  X,
-  Hammer,
-  Bot,
-  Brain,
-  Flag,
-  FlagOff,
-  ChevronDown,
-} from 'lucide-react'
+import { DemoShell } from '@/components/demos/demo-shell'
+import { MarkdownContent } from '@/components/chat/message-bubble'
+import { AlertCircle, Loader2, X, Wrench, Bot, Brain, Flag, ChevronDown, Square } from 'lucide-react'
 
 const TYPE_COLOR: Record<string, string> = {
-  start: '#00ff88',
-  end: '#00ff88',
-  llm: '#00d4ff',
-  tool: '#a855f7',
-  memory: '#f59e0b',
+  start: '#58d1a0',
+  end: '#58d1a0',
+  llm: '#6cb6ff',
+  tool: '#b392f0',
+  memory: '#e3b341',
+}
+const FALLBACK_COLOR = '#a3aab8'
+const EDGE_IDLE = '#4a5262'
+const EDGE_TAKEN = '#58d1a0'
+const NODE_WIDTH = 150
+
+// The graph is small and fixed, so it gets a hand-placed layout instead of an auto-layout pass.
+const POSITIONS: Record<string, { x: number; y: number }> = {
+  __start__: { x: 0, y: 0 },
+  load_memory: { x: 0, y: 90 },
+  agent: { x: 0, y: 190 },
+  tools: { x: 230, y: 190 },
+  save_memory: { x: 0, y: 300 },
+  __end__: { x: 0, y: 390 },
 }
 
-const nodeStyle = (color: string, selected: boolean) => ({
-  background: '#111111',
-  border: `${selected ? 2 : 1}px solid ${color}`,
-  color,
-  fontFamily: 'monospace',
-  fontSize: '12px',
-  borderRadius: '6px',
-  padding: '8px 16px',
-  boxShadow: selected ? `0 0 0 3px ${color}33` : 'none',
-  cursor: 'pointer',
-})
+type RunState = 'idle' | 'active' | 'done'
 
-function positionFor(
-  node: AgentGraph['nodes'][number],
-  llmIndex: number
-): { x: number; y: number } {
-  switch (node.type) {
-    case 'start':
-      return { x: 300, y: 30 }
-    case 'end':
-      return { x: 300, y: 420 }
-    case 'tool':
-      return { x: 540, y: 220 }
-    default:
-      return { x: 300 + llmIndex * 180, y: 220 }
+interface TraceStep {
+  name: string
+  startedAt: number
+  ms: number | null
+  tools: string[]
+}
+
+interface Trace {
+  running: boolean
+  nodes: Record<string, RunState>
+  takenEdges: string[]
+  steps: TraceStep[]
+  reply: string
+  error: string | null
+}
+
+const edgeKey = (source: string, target: string) => `${source}->${target}`
+
+function nodeStyle(color: string, selected: boolean, run: RunState | undefined, dimIdle: boolean) {
+  const active = run === 'active'
+  return {
+    background: active ? `${color}26` : '#13161c',
+    border: `${selected || active ? 2 : 1}px solid ${color}`,
+    color,
+    fontFamily: 'var(--font-plex-mono), monospace',
+    fontSize: '12px',
+    borderRadius: '6px',
+    padding: '8px 12px',
+    width: NODE_WIDTH,
+    textAlign: 'center' as const,
+    opacity: dimIdle && (run ?? 'idle') === 'idle' ? 0.45 : 1,
+    boxShadow: selected ? `0 0 0 3px ${color}33` : 'none',
+    cursor: 'pointer',
+    transition: 'opacity 150ms, background 150ms',
   }
 }
 
-function buildEdges(graph: AgentGraph): Edge[] {
+function buildEdges(graph: AgentGraph, taken: string[]): Edge[] {
   return graph.edges.map((e, i) => {
-    const isConditional = !!e.conditional
-    const stroke = isConditional ? '#00d4ff' : '#475569'
+    const isTaken = taken.includes(edgeKey(e.source, e.target))
     return {
       id: `e${i}`,
       source: e.source,
       target: e.target,
-      animated: isConditional,
+      animated: isTaken,
       label: e.condition,
-      style: { stroke, strokeWidth: 1.5 },
-      labelStyle: {
-        fontSize: 10,
-        fontFamily: 'monospace',
-        fontWeight: 600,
-        fill: '#cbd5e1',
+      style: {
+        stroke: isTaken ? EDGE_TAKEN : EDGE_IDLE,
+        strokeWidth: isTaken ? 2 : 1.5,
+        strokeDasharray: e.conditional && !isTaken ? '5 4' : undefined,
       },
-      labelBgStyle: { fill: '#0a0a0a', fillOpacity: 0.85 },
+      labelStyle: { fontSize: 10, fontFamily: 'var(--font-plex-mono), monospace', fill: '#a3aab8' },
+      labelBgStyle: { fill: '#0c0e12', fillOpacity: 0.9 },
       labelBgPadding: [4, 2] as [number, number],
     }
   })
 }
 
-function buildNodes(graph: AgentGraph, selectedId: string | null): Node[] {
-  let llmIndex = 0
-  return graph.nodes.map((n) => {
-    const color = TYPE_COLOR[n.type] ?? '#94a3b8'
-    const pos = positionFor(n, n.type === 'llm' ? llmIndex++ : 0)
-    return {
-      id: n.id,
-      position: pos,
-      data: { label: n.label },
-      style: nodeStyle(color, n.id === selectedId),
-    }
-  })
+function buildNodes(graph: AgentGraph): Node[] {
+  return graph.nodes.map((n, i) => ({
+    id: n.id,
+    position: POSITIONS[n.id] ?? { x: 230, y: 60 + i * 70 },
+    data: { label: n.label },
+    style: nodeStyle(TYPE_COLOR[n.type] ?? FALLBACK_COLOR, false, undefined, false),
+  }))
 }
 
 function NodeIcon({ type }: { type: string }) {
-  if (type === 'tool') return <Hammer className="h-4 w-4 text-accent-purple" />
-  if (type === 'llm') return <Bot className="h-4 w-4 text-accent-cyan" />
-  if (type === 'start') return <Flag className="h-4 w-4 text-accent-green" />
-  if (type === 'end') return <FlagOff className="h-4 w-4 text-accent-green" />
-  if (type === 'memory') return <Brain className="h-4 w-4 text-amber-400" />
+  if (type === 'tool') return <Wrench className="h-4 w-4 text-node-tool" />
+  if (type === 'llm') return <Bot className="h-4 w-4 text-node-llm" />
+  if (type === 'memory') return <Brain className="h-4 w-4 text-node-memory" />
+  if (type === 'start' || type === 'end') return <Flag className="h-4 w-4 text-accent" />
   return null
+}
+
+function PanelField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs text-text-muted">{label}</p>
+      <div className="mt-1 text-sm text-text-primary">{children}</div>
+    </div>
+  )
 }
 
 function NodeDetailPanel({
@@ -129,128 +155,107 @@ function NodeDetailPanel({
         <div className="flex items-center gap-2">
           <NodeIcon type={node.type} />
           <span className="font-mono text-sm text-text-primary">{node.label}</span>
-          <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] uppercase text-text-muted">
-            {node.type}
-          </span>
         </div>
         <button
           onClick={onClose}
-          className="rounded p-1 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
+          className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
           aria-label={ta.closeAria}
         >
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 text-xs">
+      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
         {node.type === 'llm' && (
-          <div className="space-y-3">
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
-                {ta.panel.provider}
-              </p>
-              <p className="font-mono text-accent-cyan">{meta.provider ?? ta.panel.unknown}</p>
-            </div>
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">{ta.panel.model}</p>
-              <p className="font-mono text-text-primary">{meta.model ?? ta.panel.unknown}</p>
-            </div>
+          <>
+            <PanelField label={ta.panel.provider}>{meta.provider ?? ta.panel.unknown}</PanelField>
+            <PanelField label={ta.panel.model}>
+              <span className="font-mono">{meta.model ?? ta.panel.unknown}</span>
+            </PanelField>
             {meta.system_prompt && (
               <div>
                 <button
                   onClick={() => setPromptOpen((v) => !v)}
-                  className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-text-muted transition-colors hover:text-text-primary"
+                  aria-expanded={promptOpen}
+                  className="flex items-center gap-1.5 text-xs text-text-secondary transition-colors hover:text-text-primary"
                 >
                   <ChevronDown
-                    className={`h-3 w-3 transition-transform ${promptOpen ? '' : '-rotate-90'}`}
+                    className={`h-3.5 w-3.5 transition-transform ${promptOpen ? '' : '-rotate-90'}`}
                   />
                   {ta.panel.systemPrompt}
                 </button>
                 {promptOpen && (
-                  <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-border bg-[#0a0a0a] p-2 text-[11px] leading-relaxed text-text-secondary">
+                  <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-border bg-background p-2 font-mono text-xs leading-relaxed text-text-secondary">
                     {meta.system_prompt}
                   </pre>
                 )}
               </div>
             )}
-            <p className="border-t border-border pt-3 leading-relaxed text-text-muted">
+            <p className="border-t border-border pt-4 text-sm leading-relaxed text-text-secondary">
               {ta.panel.llmDescription}
             </p>
-          </div>
+          </>
         )}
 
         {node.type === 'tool' && (
-          <div className="space-y-3">
-            <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
-              {ta.panel.boundTools(meta.tools?.length ?? 0)}
-            </p>
+          <>
+            <p className="text-xs text-text-muted">{ta.panel.boundTools(meta.tools?.length ?? 0)}</p>
             {meta.tools && meta.tools.length > 0 ? (
               meta.tools.map((tool) => (
-                <div
-                  key={tool.name}
-                  className="rounded-md border border-border bg-[#0a0a0a] p-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <Hammer className="h-3.5 w-3.5 text-accent-purple" />
-                    <span className="font-mono text-sm text-accent-purple">{tool.name}</span>
-                  </div>
-                  <p className="mt-2 leading-relaxed text-text-secondary">
-                    {tool.description || <span className="italic text-text-muted">{ta.panel.noDescription}</span>}
+                <div key={tool.name} className="rounded-md border border-border bg-background p-3">
+                  <p className="font-mono text-sm text-node-tool">{tool.name}</p>
+                  <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-text-secondary">
+                    {tool.description || ta.panel.noDescription}
                   </p>
                 </div>
               ))
             ) : (
-              <p className="italic text-text-muted">
-                {ta.panel.noTools} <span className="font-mono">TAVILY_API_KEY</span>{' '}
-                {ta.panel.noToolsTail}
-              </p>
+              <p className="text-sm text-text-muted">{ta.panel.noTools}</p>
             )}
-            <p className="border-t border-border pt-3 leading-relaxed text-text-muted">
+            <p className="border-t border-border pt-4 text-sm leading-relaxed text-text-secondary">
               {ta.panel.toolDescription}
             </p>
-          </div>
+          </>
         )}
 
         {(node.type === 'start' || node.type === 'end') && (
-          <p className="leading-relaxed text-text-secondary">
+          <p className="text-sm leading-relaxed text-text-secondary">
             {meta.description ?? ta.panel.builtIn}
           </p>
         )}
 
         {node.type === 'memory' && (
-          <div className="space-y-3">
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
-                {ta.panel.role}
-              </p>
-              <p className="mt-1 font-mono text-amber-400">
-                {node.id === 'load_memory' ? ta.panel.memoryLoad : ta.panel.memorySave}
-              </p>
-            </div>
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
-                {ta.panel.behavior}
-              </p>
-              <p className="mt-1 leading-relaxed text-text-secondary">
+          <>
+            <PanelField label={ta.panel.role}>
+              {node.id === 'load_memory' ? ta.panel.memoryLoad : ta.panel.memorySave}
+            </PanelField>
+            <PanelField label={ta.panel.behavior}>
+              <span className="leading-relaxed text-text-secondary">
                 {meta.description ?? ta.panel.builtIn}
-              </p>
-            </div>
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
-                {ta.panel.storage}
-              </p>
-              <p className="mt-1 font-mono text-text-primary">
-                AsyncPostgresStore · namespace=(&apos;memories&apos;, user_id)
-              </p>
-            </div>
-            <p className="border-t border-border pt-3 leading-relaxed text-text-muted">
+              </span>
+            </PanelField>
+            <PanelField label={ta.panel.storage}>
+              <span className="font-mono text-xs">
+                AsyncPostgresStore, namespace=(&apos;memories&apos;, user_id)
+              </span>
+            </PanelField>
+            <p className="border-t border-border pt-4 text-sm leading-relaxed text-text-secondary">
               {ta.panel.memoryDescription}
             </p>
-          </div>
+          </>
         )}
       </div>
     </div>
   )
+}
+
+function formatMs(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`
+}
+
+function newThreadId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  return 'th_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
 export default function AgentsPage() {
@@ -261,6 +266,9 @@ export default function AgentsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
+  const [runInput, setRunInput] = useState('')
+  const [trace, setTrace] = useState<Trace | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -268,8 +276,8 @@ export default function AgentsPage() {
       .then((g) => {
         if (cancelled) return
         setGraph(g)
-        setNodes(buildNodes(g, null))
-        setEdges(buildEdges(g))
+        setNodes(buildNodes(g))
+        setEdges(buildEdges(g, []))
       })
       .catch((e: Error) => {
         if (cancelled) return
@@ -280,17 +288,25 @@ export default function AgentsPage() {
     }
   }, [setNodes, setEdges])
 
-  // Recompute styles when selection changes (without resetting positions)
+  useEffect(() => {
+    return () => abortRef.current?.abort()
+  }, [])
+
+  // Restyle on selection or trace changes without resetting positions the user may have dragged.
   useEffect(() => {
     if (!graph) return
     setNodes((current) =>
       current.map((n) => {
         const original = graph.nodes.find((g) => g.id === n.id)
-        const color = TYPE_COLOR[original?.type ?? ''] ?? '#94a3b8'
-        return { ...n, style: nodeStyle(color, n.id === selectedId) }
+        const color = TYPE_COLOR[original?.type ?? ''] ?? FALLBACK_COLOR
+        return {
+          ...n,
+          style: nodeStyle(color, n.id === selectedId, trace?.nodes[n.id], trace !== null),
+        }
       })
     )
-  }, [selectedId, graph, setNodes])
+    setEdges(buildEdges(graph, trace?.takenEdges ?? []))
+  }, [selectedId, graph, trace, setNodes, setEdges])
 
   const selectedNode = useMemo(
     () => graph?.nodes.find((n) => n.id === selectedId) ?? null,
@@ -301,56 +317,141 @@ export default function AgentsPage() {
     setSelectedId((prev) => (prev === node.id ? null : node.id))
   }
 
+  async function handleRun(e: React.FormEvent) {
+    e.preventDefault()
+    const message = runInput.trim()
+    if (!message || trace?.running) return
+
+    const threadId = newThreadId()
+    const controller = new AbortController()
+    abortRef.current = controller
+    // Last node that finished; the edge into the next node starts there.
+    let previous = '__start__'
+
+    setTrace({
+      running: true,
+      nodes: { __start__: 'done' },
+      takenEdges: [],
+      steps: [],
+      reply: '',
+      error: null,
+    })
+
+    try {
+      for await (const event of streamChat(message, threadId, getUserId(), {
+        signal: controller.signal,
+      })) {
+        if (event.type === 'node' && event.status === 'start') {
+          const from = previous
+          setTrace(
+            (tr) =>
+              tr && {
+                ...tr,
+                nodes: { ...tr.nodes, [event.name]: 'active' },
+                takenEdges: [...tr.takenEdges, edgeKey(from, event.name)],
+                steps: [
+                  ...tr.steps,
+                  { name: event.name, startedAt: performance.now(), ms: null, tools: [] },
+                ],
+              }
+          )
+        } else if (event.type === 'node' && event.status === 'end') {
+          previous = event.name
+          setTrace((tr) => {
+            if (!tr) return tr
+            const steps = [...tr.steps]
+            for (let i = steps.length - 1; i >= 0; i--) {
+              if (steps[i].name === event.name && steps[i].ms === null) {
+                steps[i] = { ...steps[i], ms: performance.now() - steps[i].startedAt }
+                break
+              }
+            }
+            return { ...tr, nodes: { ...tr.nodes, [event.name]: 'done' }, steps }
+          })
+        } else if (event.type === 'tool_call') {
+          setTrace((tr) => {
+            if (!tr || tr.steps.length === 0) return tr
+            const steps = [...tr.steps]
+            const last = steps[steps.length - 1]
+            steps[steps.length - 1] = { ...last, tools: [...last.tools, event.name] }
+            return { ...tr, steps }
+          })
+        } else if (event.type === 'token') {
+          setTrace((tr) => tr && { ...tr, reply: tr.reply + event.text })
+        } else if (event.type === 'error') {
+          setTrace((tr) => tr && { ...tr, error: ta.run.failed })
+        }
+      }
+      const from = previous
+      setTrace(
+        (tr) =>
+          tr &&
+          (tr.error
+            ? tr
+            : {
+                ...tr,
+                nodes: { ...tr.nodes, __end__: 'done' },
+                takenEdges: [...tr.takenEdges, edgeKey(from, '__end__')],
+              })
+      )
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        const message = err instanceof ApiError ? err.message : ta.run.failed
+        setTrace((tr) => tr && { ...tr, error: message })
+      }
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null
+      setTrace((tr) => tr && { ...tr, running: false })
+      deleteThread(threadId).catch(() => {})
+    }
+  }
+
+  const legend = [
+    { color: 'bg-accent', label: ta.legend.startEnd },
+    { color: 'bg-node-llm', label: ta.legend.llm },
+    { color: 'bg-node-tool', label: ta.legend.tools },
+    { color: 'bg-node-memory', label: ta.legend.memory },
+  ]
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-      <div className="mb-5 sm:mb-6">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-accent-green sm:text-xs">
-          {ta.label}
-        </p>
-        <h1 className="text-xl font-bold text-text-primary sm:text-2xl">{ta.title}</h1>
-        <p className="text-xs text-text-secondary sm:text-sm">
-          {ta.subtitlePrefix} <span className="font-mono">{ta.loopText}</span> {ta.subtitleSuffix}
-        </p>
-      </div>
+    <DemoShell
+      title={ta.title}
+      description={ta.description}
+      stack={demoById('agents').stack}
+      width="wide"
+    >
+      <ul className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-text-secondary">
+        {legend.map((item) => (
+          <li key={item.label} className="flex items-center gap-1.5">
+            <span className={`h-2.5 w-2.5 rounded-sm ${item.color}`} aria-hidden />
+            {item.label}
+          </li>
+        ))}
+        <li className="flex items-center gap-1.5">
+          <span className="w-4 border-t border-dashed border-text-muted" aria-hidden />
+          {ta.legend.conditional}
+        </li>
+      </ul>
 
-      {/* Legend */}
-      <div className="mb-4 flex flex-wrap gap-4 font-mono text-xs text-text-muted">
-        <span>
-          <span className="text-accent-green">■</span> {ta.legend.startEnd}
-        </span>
-        <span>
-          <span className="text-accent-cyan">■</span> {ta.legend.llm}
-        </span>
-        <span>
-          <span className="text-accent-purple">■</span> {ta.legend.tools}
-        </span>
-        <span>
-          <span className="text-amber-400">■</span> {ta.legend.memory}
-        </span>
-        <span>
-          <span className="text-accent-cyan">⇢</span> {ta.legend.conditional}
-        </span>
-      </div>
-
-      <div className="flex flex-col overflow-hidden rounded-lg border border-border md:h-[600px] md:flex-row">
-        <div className="h-[380px] w-full shrink-0 md:h-auto md:w-auto md:flex-1 md:shrink">
+      <div className="flex flex-col overflow-hidden rounded-lg border border-border md:h-[540px] md:flex-row">
+        <div className="h-[400px] w-full shrink-0 bg-background md:h-auto md:w-auto md:flex-1 md:shrink">
           {error ? (
-            <div className="flex h-full items-center justify-center bg-[#0a0a0a]">
-              <div className="flex max-w-md items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/5 p-4 font-mono text-xs">
+            <div className="flex h-full items-center justify-center p-4">
+              <div
+                role="alert"
+                className="flex max-w-md items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/5 p-4 text-sm"
+              >
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
                 <div>
                   <p className="text-red-400">{ta.errorTitle}</p>
-                  <p className="mt-1 text-text-muted">{ta.errorHint}</p>
-                  <p className="mt-2 text-text-muted/60">{error}</p>
+                  <p className="mt-1 text-text-secondary">{ta.errorHint}</p>
                 </div>
               </div>
             </div>
           ) : !graph ? (
-            <div className="flex h-full items-center justify-center bg-[#0a0a0a]">
-              <div className="flex items-center gap-2 font-mono text-xs text-text-muted">
-                <Loader2 className="h-4 w-4 animate-spin text-accent-green" />
-                {ta.loading}
-              </div>
+            <div className="flex h-full items-center justify-center gap-2 text-sm text-text-muted">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {ta.loading}
             </div>
           ) : (
             <ReactFlow
@@ -360,19 +461,13 @@ export default function AgentsPage() {
               onEdgesChange={onEdgesChange}
               onNodeClick={onNodeClick}
               fitView
-              fitViewOptions={{ padding: 0.25 }}
+              fitViewOptions={{ padding: 0.2 }}
               minZoom={0.3}
-              proOptions={{ hideAttribution: false }}
-              style={{ background: '#0a0a0a' }}
+              colorMode="dark"
+              style={{ background: '#0c0e12' }}
             >
-              <Background color="#1a1a1a" gap={24} />
-              <Controls
-                style={{
-                  background: '#111111',
-                  border: '1px solid #2a2a2a',
-                  color: '#94a3b8',
-                }}
-              />
+              <Background color="#1f242d" gap={24} />
+              <Controls showInteractive={false} />
             </ReactFlow>
           )}
         </div>
@@ -382,18 +477,91 @@ export default function AgentsPage() {
         )}
       </div>
 
-      <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-lg border border-border bg-surface p-4 sm:flex-row sm:items-center sm:gap-4">
-        <p className="font-mono text-xs leading-relaxed text-text-muted">
-          <span className="text-accent-green">{'>'}</span> {ta.footer}
-        </p>
-        <Link
-          href="/demos/state"
-          className="flex shrink-0 items-center gap-1.5 rounded-md border border-accent-cyan/30 bg-accent-cyan/5 px-3 py-1.5 font-mono text-xs text-accent-cyan transition-colors hover:bg-accent-cyan/10"
-        >
-          <Activity className="h-3 w-3" />
-          {ta.inspectState}
-        </Link>
-      </div>
-    </div>
+      {/* Live run */}
+      <section className="mt-6 grid gap-6 rounded-lg border border-border bg-surface p-4 sm:p-6 lg:grid-cols-2">
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">{ta.run.title}</h2>
+          <form onSubmit={handleRun} className="mt-3 flex gap-2">
+            <input
+              value={runInput}
+              onChange={(e) => setRunInput(e.target.value)}
+              placeholder={ta.run.placeholder}
+              aria-label={ta.run.title}
+              maxLength={4000}
+              disabled={!graph}
+              className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-3 py-2.5 text-base text-text-primary placeholder-text-muted outline-none transition-colors focus:border-accent/60 disabled:opacity-50 sm:text-sm"
+            />
+            {trace?.running ? (
+              <button
+                type="button"
+                onClick={() => abortRef.current?.abort()}
+                className="flex shrink-0 items-center gap-2 rounded-md border border-border px-4 text-sm font-medium text-text-primary transition-colors hover:border-text-muted"
+              >
+                <Square className="h-3.5 w-3.5 fill-current" />
+                {ta.run.stop}
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!runInput.trim() || !graph}
+                className="shrink-0 rounded-md bg-accent px-5 text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {ta.run.button}
+              </button>
+            )}
+          </form>
+          <p className="mt-2 text-xs text-text-muted">{ta.run.hint}</p>
+
+          {trace?.reply && (
+            <div className="mt-5">
+              <h3 className="text-xs text-text-muted">{ta.run.answerLabel}</h3>
+              <div className="mt-1 text-sm leading-relaxed text-text-primary">
+                <MarkdownContent text={trace.reply} />
+              </div>
+            </div>
+          )}
+          {trace?.error && (
+            <p role="alert" className="mt-4 text-sm text-red-400">
+              {trace.error}
+            </p>
+          )}
+        </div>
+
+        <div aria-live="polite">
+          <h2 className="text-base font-semibold text-text-primary">{ta.run.logTitle}</h2>
+          {!trace || trace.steps.length === 0 ? (
+            <p className="mt-3 text-sm text-text-muted">
+              {trace?.running ? ta.loading : ta.run.logEmpty}
+            </p>
+          ) : (
+            <ol className="mt-3 divide-y divide-border border-y border-border">
+              {trace.steps.map((step, i) => (
+                <li key={i} className="flex items-baseline gap-3 py-2 text-sm">
+                  <span className="w-5 shrink-0 text-right text-xs tabular-nums text-text-muted">
+                    {i + 1}
+                  </span>
+                  <span className="font-mono text-text-primary">{step.name}</span>
+                  {step.tools.length > 0 && (
+                    <span className="min-w-0 truncate font-mono text-xs text-node-tool">
+                      {step.tools.join(', ')}
+                    </span>
+                  )}
+                  <span className="ml-auto shrink-0 text-xs tabular-nums text-text-muted">
+                    {step.ms === null ? ta.run.running : formatMs(step.ms)}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </section>
+
+      <Link
+        href="/demos/state"
+        className="mt-6 inline-block text-sm font-medium text-accent underline-offset-4 hover:underline"
+      >
+        {ta.inspectState}
+      </Link>
+    </DemoShell>
   )
 }
