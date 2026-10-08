@@ -5,7 +5,7 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Repo root: apps/api/core/config.py → parents[3]
-ENV_PATH = Path(__file__).resolve() / ".env"
+ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
 
 
 class Settings(BaseSettings):
@@ -49,7 +49,6 @@ class Settings(BaseSettings):
     agent_max_iterations: int = 5
 
     database_url: str = "postgresql+asyncpg://portfolio:portfolio@localhost:5432/portfolio"
-    redis_url: str = "redis://localhost:6379"
 
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
 
