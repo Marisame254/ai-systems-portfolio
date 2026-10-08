@@ -71,11 +71,16 @@ class DocumentRow:
 @dataclass
 class SearchHit:
     content: str
-    score: float
+    score: float  # cosine similarity, 0–1, higher is more relevant
     filename: str
     page: int | None
     chunk_index: int
     document_id: str
+
+
+def distance_to_similarity(distance: float) -> float:
+    """PGVector returns cosine distance (0 = identical, 2 = opposite); expose it as a 0–1 similarity."""
+    return max(0.0, min(1.0, 1.0 - distance))
 
 
 def _ext_for(filename: str) -> str:
@@ -306,16 +311,22 @@ class RAGService:
             filter_["filename"] = filename
         try:
             results = await self.vector_store.asimilarity_search_with_score(query, k=top_k, filter=filter_)
-        except Exception:
+        except Exception as exc:
             logger.exception("RAG: similarity search failed")
-            return []
+            raise RAGError(
+                "Document search is unavailable right now. Check the embeddings provider.",
+                status_code=503,
+            ) from exc
         hits: list[SearchHit] = []
-        for doc, score in results:
+        for doc, distance in results:
+            score = distance_to_similarity(float(distance))
+            if score < settings.rag_min_similarity:
+                continue
             md = doc.metadata or {}
             hits.append(
                 SearchHit(
                     content=doc.page_content,
-                    score=float(score),
+                    score=score,
                     filename=str(md.get("filename", "")),
                     page=int(md["page"]) if md.get("page") is not None else None,
                     chunk_index=int(md.get("chunk_index", 0)),

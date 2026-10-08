@@ -30,12 +30,18 @@ async def lifespan(app: FastAPI):
     saver = AsyncPostgresSaver(pool)
     await saver.setup()
 
-    store = AsyncPostgresStore(pool)
+    embeddings = get_embeddings()
+
+    # Indexing the `text` field makes store.asearch(query=...) a semantic search over memories.
+    store = AsyncPostgresStore(
+        pool,
+        index={"dims": settings.embedding_dim, "embed": embeddings, "fields": ["text"]},
+    )
     await store.setup()
 
     await ensure_schema(pool)
 
-    rag_service = await init_rag_service(pool, get_embeddings())
+    rag_service = await init_rag_service(pool, embeddings)
 
     app.state.checkpoint_pool = pool
     app.state.memory_store = store

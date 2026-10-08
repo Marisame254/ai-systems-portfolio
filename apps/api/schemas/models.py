@@ -1,19 +1,19 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-
-class ChatMessage(BaseModel):
-    role: Literal["user", "assistant"]
-    content: str
+ID_MAX_CHARS = 100
 
 
 class ChatRequest(BaseModel):
-    message: str
-    thread_id: str
-    user_id: str | None = None
-    checkpoint_id: str | None = None
-    history: list[ChatMessage] = []  # legacy, ignored when checkpointer is active
+    message: str = Field(min_length=1, max_length=4000)
+    thread_id: str = Field(min_length=1, max_length=ID_MAX_CHARS)
+    user_id: str | None = Field(default=None, max_length=ID_MAX_CHARS)
+    checkpoint_id: str | None = Field(default=None, max_length=ID_MAX_CHARS)
+
+
+class ThreadIdsRequest(BaseModel):
+    thread_ids: list[str] = Field(default_factory=list, max_length=50)
 
 
 class MemoryEntry(BaseModel):
@@ -29,14 +29,14 @@ class MemoryListResponse(BaseModel):
 
 
 class MemoryCreateRequest(BaseModel):
-    text: str
+    text: str = Field(min_length=1, max_length=300)
 
 
 class RAGQueryRequest(BaseModel):
-    query: str
-    user_id: str
-    filename: str | None = None
-    top_k: int = 4
+    query: str = Field(min_length=1, max_length=1000)
+    user_id: str = Field(min_length=1, max_length=ID_MAX_CHARS)
+    filename: str | None = Field(default=None, max_length=255)
+    top_k: int = Field(default=4, ge=1, le=8)
 
 
 class DocumentInfo(BaseModel):
@@ -56,7 +56,7 @@ class DocumentListResponse(BaseModel):
 
 class RAGSource(BaseModel):
     content: str
-    score: float
+    score: float  # cosine similarity, 0–1, higher is more relevant
     filename: str
     page: int | None = None
     chunk_index: int
@@ -76,8 +76,3 @@ class RAGInfo(BaseModel):
     max_docs_per_user: int
     max_upload_bytes: int
     supported_types: list[str]
-
-
-class AgentRunRequest(BaseModel):
-    input: str
-    config: dict = {}

@@ -5,7 +5,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, tool
 
 from core.config import settings
-from services.rag import RAGService
+from services.rag import RAGError, RAGService
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +55,15 @@ def _make_rag_tool(rag_service: RAGService) -> BaseTool:
             )
             return "Error: no user_id in context; RAG search unavailable."
 
-        hits = await rag_service.search(
-            query=query,
-            user_id=user_id,
-            top_k=settings.rag_top_k,
-            filename=filename,
-        )
+        try:
+            hits = await rag_service.search(
+                query=query,
+                user_id=user_id,
+                top_k=settings.rag_top_k,
+                filename=filename,
+            )
+        except RAGError as exc:
+            return f"Error: {exc}"
         if not hits:
             return "No relevant chunks found in the user's documents."
 
@@ -69,7 +72,7 @@ def _make_rag_tool(rag_service: RAGService) -> BaseTool:
             header = f"[{h.filename}"
             if h.page is not None:
                 header += f", page {h.page}"
-            header += f", score {h.score:.2f}]"
+            header += f", similarity {h.score:.2f}]"
             formatted.append(f"{header}\n{h.content}")
         return "\n---\n".join(formatted)
 

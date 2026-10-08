@@ -6,7 +6,12 @@ from uuid import uuid4
 
 from langgraph.store.base import BaseStore
 
+from core.config import settings
 from schemas.models import MemoryEntry
+
+
+class MemoryLimitError(Exception):
+    """Raised when a user already holds `settings.memory_max_per_user` memories."""
 
 
 def _namespace(user_id: str) -> tuple[str, str]:
@@ -46,6 +51,11 @@ async def add_memory(
     *,
     source: str = "manual",
 ) -> MemoryEntry:
+    existing = await store.asearch(_namespace(user_id), limit=settings.memory_max_per_user)
+    if len(existing) >= settings.memory_max_per_user:
+        raise MemoryLimitError(
+            f"Memory limit reached ({settings.memory_max_per_user}). Delete an entry first."
+        )
     key = str(uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
     value = {"text": text, "source": source, "created_at": created_at}

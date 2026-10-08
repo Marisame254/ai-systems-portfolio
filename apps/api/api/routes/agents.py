@@ -2,13 +2,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from langgraph.graph.state import CompiledStateGraph
-from pydantic import BaseModel
 
 from agents.chat_agent import SYSTEM_PROMPT
 from agents.serialize import serialize_state
 from agents.tools import build_tools
 from core.config import settings
 from core.dependencies import get_chat_agent
+from schemas.models import ThreadIdsRequest
 from services.threads import delete_thread_row, list_threads_by_ids
 
 router = APIRouter()
@@ -55,9 +55,9 @@ def _node_meta(node_id: str, request: Request | None = None) -> dict[str, Any]:
     if node_id == "load_memory":
         return {
             "description": (
-                "Reads long-term memories from the LangGraph Store "
-                "(namespace=('memories', user_id)) and injects them as a system message "
-                "so the agent can personalize replies."
+                "Semantic search over the LangGraph Store (namespace=('memories', user_id)) "
+                "using the user's latest message; the closest facts are injected as a system "
+                "message so the agent can personalize replies."
             )
         }
     if node_id == "save_memory":
@@ -96,12 +96,8 @@ async def get_graph(request: Request, agent: CompiledStateGraph = Depends(get_ch
     return {"nodes": nodes, "edges": edges}
 
 
-class ThreadIdsBody(BaseModel):
-    thread_ids: list[str] = []
-
-
 @router.post("/threads/list")
-async def threads_list(body: ThreadIdsBody, http_request: Request):
+async def threads_list(body: ThreadIdsRequest, http_request: Request):
     pool = http_request.app.state.checkpoint_pool
     return await list_threads_by_ids(pool, body.thread_ids)
 

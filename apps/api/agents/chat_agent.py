@@ -17,6 +17,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.store.base import BaseStore
 
 from agents.state import AgentState
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -186,8 +187,11 @@ def build_chat_graph(
             existing_texts = set()
         ts = datetime.now(timezone.utc).isoformat()
         for fact in facts:
+            if len(existing_texts) >= settings.memory_max_per_user:
+                break
             if fact.strip().lower() in existing_texts:
                 continue
+            existing_texts.add(fact.strip().lower())
             try:
                 await store.aput(
                     ("memories", user_id),

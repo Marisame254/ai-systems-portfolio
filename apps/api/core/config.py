@@ -43,10 +43,22 @@ class Settings(BaseSettings):
     rag_chunk_size: int = 1000
     rag_chunk_overlap: int = 200
     rag_top_k: int = 4
+    # Chunks below this cosine similarity (0–1) are dropped. Tune per embedding model.
+    rag_min_similarity: float = 0.2
+
+    # Long-term memory
+    memory_max_per_user: int = 50
 
     # Agent tools
     tavily_api_key: str = ""
     agent_max_iterations: int = 5
+
+    # Rate limits: requests per window, per client IP
+    rate_limit_window_seconds: int = 60
+    rate_limit_chat: int = 15
+    rate_limit_rag_query: int = 15
+    rate_limit_rag_upload: int = 6
+    rate_limit_memory_write: int = 20
 
     database_url: str = "postgresql+asyncpg://portfolio:portfolio@localhost:5432/portfolio"
 

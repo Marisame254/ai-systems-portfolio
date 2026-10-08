@@ -8,10 +8,10 @@ Turborepo monorepo with two apps that talk over HTTP:
 
 - `apps/web` — Next.js 14 (App Router), Tailwind, shadcn/ui, framer-motion, `@xyflow/react` for graph viz. Package name `@portfolio/web`.
 - `apps/api` — FastAPI (Python 3.11, managed by `uv`). Routes in `api/routes/{chat,rag,agents,memory}.py`, mounted under `/api/*` in `main.py`. Wheels package list in `pyproject.toml` `[tool.hatch.build.targets.wheel]`: `api`, `core`, `agents`, `services`, `schemas` — new top-level Python modules must be added there or they won't ship.
-- Postgres 16 + pgvector, Redis 7. Both started via `docker-compose.yml`.
+- Postgres 16 + pgvector, started via `docker-compose.yml`. It holds everything: LangGraph checkpoints, the long-term memory store (vector-indexed), RAG chunks, and thread metadata.
 - LangGraph + LangChain orchestrate the LLM. `core/dependencies.py::get_chat_model()` selects provider by `ENVIRONMENT`: `dev` → Ollama (`llama3.1:8b` via `langchain-ollama`), `prod` → OpenAI (`gpt-4o-mini` via `langchain-openai`). Models/URLs configurable in `apps/api/core/config.py`.
 
-Data flow: Next.js UI → FastAPI gateway → LangGraph orchestrator → {pgvector RAG, Redis memory, agent tools}.
+Data flow: Next.js UI → FastAPI gateway → LangGraph orchestrator → {pgvector RAG, Postgres memory store, agent tools}.
 
 ## Common commands
 
@@ -39,7 +39,7 @@ uv run ruff format .                                 # format
 Infra:
 
 ```bash
-docker compose up postgres redis -d   # just the databases (typical dev flow)
+docker compose up postgres -d         # just the database (typical dev flow)
 docker compose up --build             # full stack incl. api + web
 ```
 
@@ -51,3 +51,5 @@ Env: copy `.env.example` to `.env` at repo root and set `ANTHROPIC_API_KEY`. Set
 - CORS allow-list is driven by `settings.cors_origins` — update there (or via `CORS_ORIGINS` env) when adding new frontend origins.
 - The API package is flat (no `src/`): imports are `from core.config import settings`, `from api.routes import ...`. Run uvicorn from `apps/api/` so these resolve.
 - Ruff is the only Python linter/formatter; there is no separate black/isort config.
+- Public write/LLM routes are rate-limited per client IP with `core/rate_limit.py::rate_limit(scope, setting_name)` as a route dependency (in-memory, per worker). New routes that call an LLM or embeddings should add it.
+- SSE endpoints share `api/sse.py` (`sse_event`, `SSE_DONE`, `SSE_HEADERS`); the frontend reads them with `readSSE` in `apps/web/src/lib/api.ts`.

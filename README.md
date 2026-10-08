@@ -1,23 +1,22 @@
 # AI Systems Portfolio
 
-Marisame's AI Systems Engineering portfolio — monorepo with a Next.js portfolio site and FastAPI AI demos.
+Raul Vasquez's (Marisame) AI Systems Engineering portfolio — monorepo with a Next.js portfolio site and FastAPI AI demos.
 
 ```
 User → Next.js UI → FastAPI Gateway → LangGraph Orchestrator
                                           ├── RAG (pgvector)
-                                          ├── Memory (Redis)
-                                          └── Agents
+                                          ├── Long-term memory (Postgres store, vector-indexed)
+                                          └── Agent tools (web search, document search)
 ```
 
 ## Stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 14 · Tailwind CSS · shadcn/ui |
-| Backend | FastAPI · Python 3.11 · uv |
-| AI | LangGraph · Anthropic Claude claude-sonnet-4-6 |
+| Frontend | Next.js 14 · Tailwind CSS · React Flow |
+| Backend | FastAPI · Python 3.11+ · uv |
+| AI | LangGraph · LangChain · Ollama (dev) / OpenAI (prod) |
 | Database | PostgreSQL 16 + pgvector |
-| Cache | Redis 7 |
 | Infra | Docker Compose · Turborepo |
 
 ## Quick Start
@@ -27,18 +26,19 @@ User → Next.js UI → FastAPI Gateway → LangGraph Orchestrator
 - Node.js 22+ · pnpm 10+
 - Python 3.11+ · uv
 - Docker & Docker Compose
+- Ollama for local dev (`ollama pull nomic-embed-text` plus the chat model set in `OLLAMA_MODEL`)
 
 ### 1. Environment
 
 ```bash
 cp .env.example .env
-# Add your ANTHROPIC_API_KEY to .env
+# dev runs on Ollama; set OPENAI_API_KEY and ENVIRONMENT=prod to use OpenAI
 ```
 
-### 2. Start databases
+### 2. Start the database
 
 ```bash
-docker compose up postgres redis -d
+docker compose up postgres -d
 ```
 
 ### 3. Start API
@@ -79,25 +79,38 @@ ai-systems-portfolio/
 
 ## Demos
 
-| Demo | Description | Status |
-|---|---|---|
-| AI Chat | Streaming chat with Claude claude-sonnet-4-6 | Live |
-| RAG | Document upload + pgvector retrieval | Preview |
-| Agent Graph | Interactive LangGraph visualization | Preview |
-| Memory | Redis-backed session memory | Preview |
+| Demo | Description |
+|---|---|
+| AI Chat | Tool-calling LangGraph agent with token streaming, persistent threads, and checkpoint branching |
+| RAG | Document upload, pgvector retrieval, streamed answers with numbered citations |
+| Agent Graph | Interactive view of the agent's graph with a live execution trace |
+| Memory | Long-term user facts in the LangGraph Postgres store, retrieved by semantic search |
+| State Inspector | Per-thread state and checkpoint history, with rewind |
+
+Public routes that reach an LLM or the embeddings provider are rate-limited per client IP (see `RATE_LIMIT_*` in `.env.example`).
 
 ## Development
 
 ```bash
-# Install all dependencies
+# Install JS dependencies
 pnpm install
 
-# Run all apps in parallel
+# Run the web app
 pnpm dev
 
-# Build everything
+# Build / lint the web app
 pnpm build
-
-# Lint
 pnpm lint
+
+# API: lint and tests
+cd apps/api
+uv run ruff check .
+uv run pytest
+```
+
+If memories were stored before the store had a vector index, embed them once:
+
+```bash
+cd apps/api
+uv run python -m scripts.reindex_memories
 ```

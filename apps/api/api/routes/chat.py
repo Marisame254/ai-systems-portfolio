@@ -1,4 +1,3 @@
-import json
 import logging
 
 from fastapi import APIRouter, Depends, Request
@@ -7,8 +6,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph.state import CompiledStateGraph
 
 from agents.chat_agent import SYSTEM_PROMPT
+from api.sse import SSE_DONE, SSE_HEADERS, sse_event
 from core.config import settings
 from core.dependencies import get_chat_agent
+from core.rate_limit import rate_limit
 from schemas.models import ChatRequest
 from services.threads import upsert_thread
 
@@ -27,9 +28,8 @@ async def chat_info():
 TOOL_RESULT_PREVIEW_CHARS = 500
 TITLE_MAX_CHARS = 60
 
-
-def _sse(payload: dict) -> str:
-    return f"data: {json.dumps(payload)}\n\n"
+# Graph nodes surfaced to the client as `node` events (live execution trace).
+TRACED_NODES = {"load_memory", "agent", "tools", "save_memory"}
 
 
 async def generate_stream(
@@ -70,6 +70,10 @@ async def generate_stream(
         new_messages = [HumanMessage(content=request.message)]
         title = None
 
+    # node name -> run_id of the run we reported as started. Runnables nested inside a node
+    # can carry the node's name too; tracking the outer run_id keeps one start/end pair per visit.
+    active_nodes: dict[str, str] = {}
+
     try:
         async for event in agent.astream_events(
             {"messages": new_messages},
@@ -78,16 +82,32 @@ async def generate_stream(
         ):
             kind = event["event"]
 
-            if kind == "on_chat_model_stream":
+            if kind == "on_chain_start":
+                name = event.get("name", "")
+                if (
+                    name in TRACED_NODES
+                    and (event.get("metadata") or {}).get("langgraph_node") == name
+                    and name not in active_nodes
+                ):
+                    active_nodes[name] = event["run_id"]
+                    yield sse_event({"type": "node", "name": name, "status": "start"})
+
+            elif kind == "on_chain_end":
+                name = event.get("name", "")
+                if active_nodes.get(name) == event["run_id"]:
+                    del active_nodes[name]
+                    yield sse_event({"type": "node", "name": name, "status": "end"})
+
+            elif kind == "on_chat_model_stream":
                 if "memory_extraction" in (event.get("tags") or []):
                     continue
                 chunk = event["data"].get("chunk")
                 text = getattr(chunk, "content", "") if chunk else ""
                 if text:
-                    yield _sse({"type": "token", "text": text})
+                    yield sse_event({"type": "token", "text": text})
 
             elif kind == "on_tool_start":
-                yield _sse(
+                yield sse_event(
                     {
                         "type": "tool_call",
                         "name": event.get("name", ""),
@@ -100,7 +120,7 @@ async def generate_stream(
                 result_str = str(output) if output is not None else ""
                 if len(result_str) > TOOL_RESULT_PREVIEW_CHARS:
                     result_str = result_str[:TOOL_RESULT_PREVIEW_CHARS] + "..."
-                yield _sse(
+                yield sse_event(
                     {
                         "type": "tool_result",
                         "name": event.get("name", ""),
@@ -111,14 +131,14 @@ async def generate_stream(
         await upsert_thread(pool, request.thread_id, title=title)
     except Exception:
         logger.exception("chat.stream failed thread=%s", request.thread_id)
-        yield _sse(
+        yield sse_event(
             {"type": "error", "message": "El asistente falló al generar la respuesta."}
         )
     finally:
-        yield "data: [DONE]\n\n"
+        yield SSE_DONE
 
 
-@router.post("/stream")
+@router.post("/stream", dependencies=[Depends(rate_limit("chat", "rate_limit_chat"))])
 async def stream_chat(
     request: ChatRequest,
     http_request: Request,
@@ -128,8 +148,5 @@ async def stream_chat(
     return StreamingResponse(
         generate_stream(agent, pool, request),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+        headers=SSE_HEADERS,
     )
