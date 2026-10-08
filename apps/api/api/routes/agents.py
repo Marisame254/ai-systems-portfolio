@@ -1,6 +1,7 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from langgraph.graph import END
 from langgraph.graph.state import CompiledStateGraph
 
 from agents.chat_agent import SYSTEM_PROMPT
@@ -89,8 +90,11 @@ async def get_graph(request: Request, agent: CompiledStateGraph = Depends(get_ch
         item: dict[str, Any] = {"source": edge.source, "target": edge.target}
         if getattr(edge, "conditional", False):
             item["conditional"] = True
-        if getattr(edge, "data", None):
-            item["condition"] = str(edge.data)
+        # A branch label is the routing key, and tools_condition's "no tool calls" key is END
+        # even though that branch is mapped to save_memory. Shown as a label it reads as a node.
+        condition = getattr(edge, "data", None)
+        if condition and str(condition) != END:
+            item["condition"] = str(condition)
         edges.append(item)
 
     return {"nodes": nodes, "edges": edges}
