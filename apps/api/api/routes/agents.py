@@ -81,6 +81,14 @@ def _node_meta(name: str, request: Request) -> dict[str, Any]:
     meta: dict[str, Any] = {}
     if name in _NODE_DESCRIPTIONS:
         meta["description"] = _NODE_DESCRIPTIONS[name]
+    # The web app shows its own translated descriptions and fills these values into them.
+    if name == "summarize":
+        meta["params"] = {
+            "trigger": settings.summary_trigger_messages,
+            "keep_turns": settings.summary_keep_turns,
+        }
+    if name == "rewrite_query":
+        meta["params"] = {"max_rewrites": settings.rag_max_rewrites}
     if name == "tools":
         # search_user_documents is bound to the model but answered by the document_search subgraph.
         meta["tools"] = [

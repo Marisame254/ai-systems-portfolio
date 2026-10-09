@@ -288,6 +288,36 @@ export const en = {
       toolDescription:
         'ToolNode executes the tools the LLM requested and appends the results to state.messages, then loops back to agent. search_user_documents is not listed here: the document_search subgraph answers it.',
       builtIn: 'Built-in LangGraph node.',
+      // Keyed by node name. `{name}` placeholders are filled from the node's meta.params.
+      nodes: {
+        __start__: 'Graph entry point. Receives the new user message for the thread.',
+        __end__: 'Graph terminal node. The turn is over and the state is checkpointed.',
+        guardrail:
+          'Screens the incoming message with a short LLM call before anything else runs. Attempts to extract or override the system prompt, harmful requests and spam are routed to refuse; everything else continues. If the classifier fails, the message is let through.',
+        refuse:
+          "Writes a brief refusal in the user's language and ends the turn. The agent, its tools and the memory nodes never run for a blocked message.",
+        load_memory:
+          "Semantic search over the LangGraph store, using the user's latest message. The closest facts are injected as a system message so the agent can personalize its reply.",
+        save_memory:
+          "After the agent's final answer, an LLM call extracts durable facts about the user and saves them to the store. Skipped when there is no user_id.",
+        summarize:
+          'Runs alongside save_memory once a thread has more than {trigger} unsummarized messages. It folds the older turns into a rolling summary kept in state. From then on the agent receives the summary plus the last {keep_turns} user turns. No message is deleted from the thread.',
+        retrieve:
+          "Runs the search_user_documents tool: a pgvector similarity search over the user's uploaded documents, filtered by user and by a minimum similarity.",
+        grade_documents:
+          'An LLM call judges each retrieved chunk against the question and keeps only the ones that help answer it. If none survive, the conditional edge goes to rewrite_query.',
+        rewrite_query:
+          'Rewrites the search query with different wording and loops back to retrieve. At most {max_rewrites} rewrite(s) per search.',
+        return_documents:
+          'Packs the chunks that passed grading into the ToolMessage the agent is waiting for, or reports that nothing relevant was found.',
+      },
+      // Keyed by tool name. Tools not listed show the description the model itself receives.
+      toolSummaries: {
+        get_current_datetime: 'Returns the current date and time in UTC.',
+        search_portfolio:
+          "Searches Raul's professional profile: experience, projects, skills, education and contact details.",
+        tavily_search: 'Searches the web for current or real-world information.',
+      },
       partOf: 'Subgraph',
       storage: 'Storage',
       memoryDescription:

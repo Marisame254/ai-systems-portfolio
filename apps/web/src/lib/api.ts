@@ -215,7 +215,10 @@ export interface AgentGraphNodeMeta {
   provider?: string
   system_prompt?: string
   tools?: AgentGraphToolInfo[]
+  /** English fallback; the UI prefers its translated text for nodes it knows. */
   description?: string
+  /** Settings the translated description interpolates, e.g. `{trigger}`. */
+  params?: Record<string, number | string>
 }
 
 export interface AgentGraphNode {

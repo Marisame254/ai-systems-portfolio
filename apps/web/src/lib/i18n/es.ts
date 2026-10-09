@@ -290,6 +290,34 @@ export const es: Dictionary = {
       toolDescription:
         'ToolNode ejecuta las herramientas que pidió el LLM y agrega los resultados a state.messages; luego vuelve a agent. search_user_documents no aparece aquí: la responde el subgrafo document_search.',
       builtIn: 'Nodo integrado de LangGraph.',
+      nodes: {
+        __start__: 'Punto de entrada del grafo. Recibe el nuevo mensaje del usuario para el hilo.',
+        __end__: 'Nodo terminal del grafo. El turno terminó y el estado queda guardado en un checkpoint.',
+        guardrail:
+          'Revisa el mensaje entrante con una llamada corta al LLM antes de que corra cualquier otra cosa. Los intentos de extraer o anular el system prompt, las peticiones dañinas y el spam se envían a refuse; todo lo demás continúa. Si el clasificador falla, el mensaje pasa.',
+        refuse:
+          'Escribe una negativa breve en el idioma del usuario y termina el turno. Con un mensaje bloqueado nunca corren el agente, sus herramientas ni los nodos de memoria.',
+        load_memory:
+          'Búsqueda semántica en el store de LangGraph a partir del último mensaje del usuario. Los hechos más cercanos se inyectan como mensaje de sistema para que el agente personalice su respuesta.',
+        save_memory:
+          'Tras la respuesta final del agente, una llamada al LLM extrae hechos duraderos sobre el usuario y los guarda en el store. Se omite cuando no hay user_id.',
+        summarize:
+          'Corre junto a save_memory cuando un hilo supera los {trigger} mensajes sin resumir. Condensa los turnos antiguos en un resumen acumulado que se guarda en el estado. A partir de ahí el agente recibe el resumen más los últimos {keep_turns} turnos del usuario. No se borra ningún mensaje del hilo.',
+        retrieve:
+          'Ejecuta la herramienta search_user_documents: una búsqueda por similitud en pgvector sobre los documentos que subió el usuario, filtrada por usuario y por una similitud mínima.',
+        grade_documents:
+          'Una llamada al LLM evalúa cada fragmento recuperado frente a la pregunta y conserva solo los que ayudan a responderla. Si no queda ninguno, la arista condicional va a rewrite_query.',
+        rewrite_query:
+          'Reescribe la consulta con otras palabras y vuelve a retrieve. Como máximo {max_rewrites} reescritura(s) por búsqueda.',
+        return_documents:
+          'Empaqueta los fragmentos que pasaron la evaluación en el ToolMessage que espera el agente, o informa de que no se encontró nada relevante.',
+      },
+      toolSummaries: {
+        get_current_datetime: 'Devuelve la fecha y hora actuales en UTC.',
+        search_portfolio:
+          'Busca en el perfil profesional de Raúl: experiencia, proyectos, habilidades, formación y datos de contacto.',
+        tavily_search: 'Busca en la web información actual o del mundo real.',
+      },
       partOf: 'Subgrafo',
       storage: 'Almacenamiento',
       memoryDescription:

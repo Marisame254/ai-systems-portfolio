@@ -268,6 +268,12 @@ function NodeDetailPanel({
   const [promptOpen, setPromptOpen] = useState(false)
   const meta = node.meta ?? {}
   const usesStore = node.id === 'load_memory' || node.id === 'save_memory'
+  // Translated text for the nodes this page knows; the API's English text for any other.
+  const translated = (ta.panel.nodes as Record<string, string>)[node.label]
+  const description = translated
+    ? translated.replace(/\{(\w+)\}/g, (match, key) => String(meta.params?.[key] ?? match))
+    : (meta.description ?? ta.panel.builtIn)
+  const toolSummaries = ta.panel.toolSummaries as Record<string, string>
 
   return (
     <div className="flex h-full w-full shrink-0 flex-col border-t border-border bg-surface md:w-80 md:border-l md:border-t-0">
@@ -325,7 +331,7 @@ function NodeDetailPanel({
                 <div key={tool.name} className="rounded-md border border-border bg-background p-3">
                   <p className="font-mono text-sm text-node-tool">{tool.name}</p>
                   <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-text-secondary">
-                    {tool.description || ta.panel.noDescription}
+                    {toolSummaries[tool.name] || tool.description || ta.panel.noDescription}
                   </p>
                 </div>
               ))
@@ -346,7 +352,7 @@ function NodeDetailPanel({
               </PanelField>
             )}
             <p className="text-sm leading-relaxed text-text-secondary">
-              {meta.description ?? ta.panel.builtIn}
+              {description}
             </p>
             {usesStore && (
               <>
