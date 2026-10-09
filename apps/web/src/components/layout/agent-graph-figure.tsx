@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 
-// Mirrors the graph built in apps/api/agents/chat_agent.py::build_chat_graph.
+// The core loop of the graph built in apps/api/agents/chat_agent.py::build_chat_graph.
+// The guardrail, the document_search subgraph and summarize are left out to keep it readable.
 const COLOR = {
   flow: '#58d1a0',
   memory: '#e3b341',

@@ -11,6 +11,7 @@ from agents.tools import build_tools
 from api.routes import agents, chat, memory, rag
 from core.config import settings
 from core.dependencies import get_chat_model, get_embeddings
+from services.portfolio import PortfolioSearch
 from services.rag import init_rag_service
 from services.threads import ensure_schema
 
@@ -46,9 +47,11 @@ async def lifespan(app: FastAPI):
     app.state.checkpoint_pool = pool
     app.state.memory_store = store
     app.state.rag_service = rag_service
+    tools = build_tools(rag_service=rag_service, portfolio=PortfolioSearch(embeddings))
+    app.state.agent_tools = tools
     app.state.chat_agent = build_chat_graph(
         get_chat_model(),
-        build_tools(rag_service=rag_service),
+        tools,
         checkpointer=saver,
         store=store,
     )

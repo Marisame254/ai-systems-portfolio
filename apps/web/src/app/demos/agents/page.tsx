@@ -5,11 +5,15 @@ import {
   ReactFlow,
   Background,
   Controls,
+  Handle,
+  MarkerType,
+  Position,
   useNodesState,
   useEdgesState,
   type Node,
   type Edge,
   type NodeMouseHandler,
+  type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import Link from 'next/link'
@@ -27,7 +31,19 @@ import { useLanguage } from '@/lib/i18n/provider'
 import type { Dictionary } from '@/lib/i18n'
 import { DemoShell } from '@/components/demos/demo-shell'
 import { MarkdownContent } from '@/components/chat/message-bubble'
-import { AlertCircle, Loader2, X, Wrench, Bot, Brain, Flag, ChevronDown, Square } from 'lucide-react'
+import {
+  AlertCircle,
+  Loader2,
+  X,
+  Wrench,
+  Bot,
+  Brain,
+  Flag,
+  ChevronDown,
+  Square,
+  ShieldCheck,
+  FileSearch,
+} from 'lucide-react'
 
 const TYPE_COLOR: Record<string, string> = {
   start: '#58d1a0',
@@ -35,6 +51,8 @@ const TYPE_COLOR: Record<string, string> = {
   llm: '#6cb6ff',
   tool: '#b392f0',
   memory: '#e3b341',
+  guard: '#f47067',
+  rag: '#39c5cf',
 }
 const FALLBACK_COLOR = '#a3aab8'
 const EDGE_IDLE = '#4a5262'
@@ -44,11 +62,47 @@ const NODE_WIDTH = 150
 // The graph is small and fixed, so it gets a hand-placed layout instead of an auto-layout pass.
 const POSITIONS: Record<string, { x: number; y: number }> = {
   __start__: { x: 0, y: 0 },
-  load_memory: { x: 0, y: 90 },
-  agent: { x: 0, y: 190 },
-  tools: { x: 230, y: 190 },
-  save_memory: { x: 0, y: 300 },
-  __end__: { x: 0, y: 390 },
+  guardrail: { x: 0, y: 85 },
+  refuse: { x: -230, y: 85 },
+  load_memory: { x: 0, y: 175 },
+  agent: { x: 0, y: 270 },
+  tools: { x: -230, y: 270 },
+  'document_search:retrieve': { x: 250, y: 180 },
+  'document_search:grade_documents': { x: 250, y: 270 },
+  'document_search:return_documents': { x: 250, y: 360 },
+  'document_search:rewrite_query': { x: 440, y: 225 },
+  summarize: { x: -230, y: 400 },
+  save_memory: { x: 0, y: 400 },
+  __end__: { x: 0, y: 490 },
+}
+
+// Frames drawn behind the nodes of each subgraph.
+const SUBGRAPH_BOXES: Record<string, { x: number; y: number; width: number; height: number }> = {
+  document_search: { x: 228, y: 128, width: 384, height: 292 },
+}
+
+// Every node exposes the same anchors; edges pick one on each end so they do not overlap.
+const ANCHORS = {
+  t: { position: Position.Top, style: { left: '50%' } },
+  b: { position: Position.Bottom, style: { left: '50%' } },
+  l1: { position: Position.Left, style: { top: '30%' } },
+  l2: { position: Position.Left, style: { top: '70%' } },
+  r1: { position: Position.Right, style: { top: '30%' } },
+  r2: { position: Position.Right, style: { top: '70%' } },
+} as const
+type Anchor = keyof typeof ANCHORS
+
+// [anchor on the source, anchor on the target]. Edges not listed run bottom to top.
+const EDGE_ANCHORS: Record<string, [Anchor, Anchor]> = {
+  'guardrail->refuse': ['l1', 'r1'],
+  'refuse->__end__': ['l1', 'l2'],
+  'agent->tools': ['l1', 'r1'],
+  'tools->agent': ['r2', 'l2'],
+  'agent->document_search:retrieve': ['r1', 'l1'],
+  'document_search:return_documents->agent': ['l1', 'r2'],
+  'document_search:grade_documents->document_search:rewrite_query': ['r1', 'b'],
+  'document_search:rewrite_query->document_search:retrieve': ['t', 'r1'],
+  'summarize->__end__': ['b', 'l1'],
 }
 
 type RunState = 'idle' | 'active' | 'done'
@@ -90,17 +144,53 @@ function nodeStyle(color: string, selected: boolean, run: RunState | undefined, 
   }
 }
 
+const HIDDEN_HANDLE = { opacity: 0, pointerEvents: 'none' as const }
+
+function GraphNode({ data }: NodeProps) {
+  return (
+    <>
+      {(Object.keys(ANCHORS) as Anchor[]).flatMap((anchor) =>
+        (['source', 'target'] as const).map((type) => (
+          <Handle
+            key={`${type}-${anchor}`}
+            id={`${type}-${anchor}`}
+            type={type}
+            position={ANCHORS[anchor].position}
+            style={{ ...ANCHORS[anchor].style, ...HIDDEN_HANDLE }}
+            isConnectable={false}
+          />
+        )),
+      )}
+      {data.label as string}
+    </>
+  )
+}
+
+function SubgraphFrame({ data }: NodeProps) {
+  return <span className="font-mono text-xs text-text-muted">{data.label as string}</span>
+}
+
+const NODE_TYPES = { graphNode: GraphNode, subgraph: SubgraphFrame }
+
 function buildEdges(graph: AgentGraph, taken: string[]): Edge[] {
   return graph.edges.map((e, i) => {
-    const isTaken = taken.includes(edgeKey(e.source, e.target))
+    const key = edgeKey(e.source, e.target)
+    const isTaken = taken.includes(key)
+    const [from, to] = EDGE_ANCHORS[key] ?? ['b', 't']
+    const stroke = isTaken ? EDGE_TAKEN : EDGE_IDLE
     return {
       id: `e${i}`,
+      type: 'smoothstep',
       source: e.source,
       target: e.target,
+      sourceHandle: `source-${from}`,
+      targetHandle: `target-${to}`,
       animated: isTaken,
       label: e.condition,
+      zIndex: isTaken ? 1 : 0,
+      markerEnd: { type: MarkerType.ArrowClosed, color: stroke, width: 16, height: 16 },
       style: {
-        stroke: isTaken ? EDGE_TAKEN : EDGE_IDLE,
+        stroke,
         strokeWidth: isTaken ? 2 : 1.5,
         strokeDasharray: e.conditional && !isTaken ? '5 4' : undefined,
       },
@@ -111,19 +201,48 @@ function buildEdges(graph: AgentGraph, taken: string[]): Edge[] {
   })
 }
 
-function buildNodes(graph: AgentGraph): Node[] {
-  return graph.nodes.map((n, i) => ({
+function buildNodes(graph: AgentGraph, subgraphLabel: (name: string) => string): Node[] {
+  const groups = new Set(graph.nodes.flatMap((n) => (n.group ? [n.group] : [])))
+  const frames: Node[] = Array.from(groups).flatMap((group) => {
+    const box = SUBGRAPH_BOXES[group]
+    if (!box) return []
+    return [
+      {
+        id: `subgraph:${group}`,
+        type: 'subgraph',
+        position: { x: box.x, y: box.y },
+        data: { label: subgraphLabel(group) },
+        draggable: false,
+        selectable: false,
+        zIndex: -1,
+        style: {
+          width: box.width,
+          height: box.height,
+          padding: '6px 10px',
+          border: '1px dashed #3a4150',
+          borderRadius: '8px',
+          background: '#13161c66',
+          pointerEvents: 'none' as const,
+        },
+      },
+    ]
+  })
+  const nodes: Node[] = graph.nodes.map((n, i) => ({
     id: n.id,
-    position: POSITIONS[n.id] ?? { x: 230, y: 60 + i * 70 },
+    type: 'graphNode',
+    position: POSITIONS[n.id] ?? { x: 660, y: i * 60 },
     data: { label: n.label },
     style: nodeStyle(TYPE_COLOR[n.type] ?? FALLBACK_COLOR, false, undefined, false),
   }))
+  return [...frames, ...nodes]
 }
 
 function NodeIcon({ type }: { type: string }) {
   if (type === 'tool') return <Wrench className="h-4 w-4 text-node-tool" />
   if (type === 'llm') return <Bot className="h-4 w-4 text-node-llm" />
   if (type === 'memory') return <Brain className="h-4 w-4 text-node-memory" />
+  if (type === 'guard') return <ShieldCheck className="h-4 w-4 text-node-guard" />
+  if (type === 'rag') return <FileSearch className="h-4 w-4 text-node-rag" />
   if (type === 'start' || type === 'end') return <Flag className="h-4 w-4 text-accent" />
   return null
 }
@@ -148,6 +267,7 @@ function NodeDetailPanel({
 }) {
   const [promptOpen, setPromptOpen] = useState(false)
   const meta = node.meta ?? {}
+  const usesStore = node.id === 'load_memory' || node.id === 'save_memory'
 
   return (
     <div className="flex h-full w-full shrink-0 flex-col border-t border-border bg-surface md:w-80 md:border-l md:border-t-0">
@@ -218,30 +338,28 @@ function NodeDetailPanel({
           </>
         )}
 
-        {(node.type === 'start' || node.type === 'end') && (
-          <p className="text-sm leading-relaxed text-text-secondary">
-            {meta.description ?? ta.panel.builtIn}
-          </p>
-        )}
-
-        {node.type === 'memory' && (
+        {node.type !== 'llm' && node.type !== 'tool' && (
           <>
-            <PanelField label={ta.panel.role}>
-              {node.id === 'load_memory' ? ta.panel.memoryLoad : ta.panel.memorySave}
-            </PanelField>
-            <PanelField label={ta.panel.behavior}>
-              <span className="leading-relaxed text-text-secondary">
-                {meta.description ?? ta.panel.builtIn}
-              </span>
-            </PanelField>
-            <PanelField label={ta.panel.storage}>
-              <span className="font-mono text-xs">
-                AsyncPostgresStore, namespace=(&apos;memories&apos;, user_id)
-              </span>
-            </PanelField>
-            <p className="border-t border-border pt-4 text-sm leading-relaxed text-text-secondary">
-              {ta.panel.memoryDescription}
+            {node.group && (
+              <PanelField label={ta.panel.partOf}>
+                <span className="font-mono text-xs">{node.group}</span>
+              </PanelField>
+            )}
+            <p className="text-sm leading-relaxed text-text-secondary">
+              {meta.description ?? ta.panel.builtIn}
             </p>
+            {usesStore && (
+              <>
+                <PanelField label={ta.panel.storage}>
+                  <span className="font-mono text-xs">
+                    AsyncPostgresStore, namespace=(&apos;memories&apos;, user_id)
+                  </span>
+                </PanelField>
+                <p className="border-t border-border pt-4 text-sm leading-relaxed text-text-secondary">
+                  {ta.panel.memoryDescription}
+                </p>
+              </>
+            )}
           </>
         )}
       </div>
@@ -276,7 +394,7 @@ export default function AgentsPage() {
       .then((g) => {
         if (cancelled) return
         setGraph(g)
-        setNodes(buildNodes(g))
+        setNodes(buildNodes(g, ta.subgraphLabel))
         setEdges(buildEdges(g, []))
       })
       .catch((e: Error) => {
@@ -286,6 +404,8 @@ export default function AgentsPage() {
     return () => {
       cancelled = true
     }
+    // Built once; the frame label is only read here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setNodes, setEdges])
 
   useEffect(() => {
@@ -298,7 +418,8 @@ export default function AgentsPage() {
     setNodes((current) =>
       current.map((n) => {
         const original = graph.nodes.find((g) => g.id === n.id)
-        const color = TYPE_COLOR[original?.type ?? ''] ?? FALLBACK_COLOR
+        if (!original) return n
+        const color = TYPE_COLOR[original.type] ?? FALLBACK_COLOR
         return {
           ...n,
           style: nodeStyle(color, n.id === selectedId, trace?.nodes[n.id], trace !== null),
@@ -314,19 +435,29 @@ export default function AgentsPage() {
   )
 
   const onNodeClick: NodeMouseHandler = (_, node) => {
+    if (node.type === 'subgraph') return
     setSelectedId((prev) => (prev === node.id ? null : node.id))
   }
 
   async function handleRun(e: React.FormEvent) {
     e.preventDefault()
     const message = runInput.trim()
-    if (!message || trace?.running) return
+    if (!message || trace?.running || !graph) return
 
     const threadId = newThreadId()
     const controller = new AbortController()
     abortRef.current = controller
-    // Last node that finished; the edge into the next node starts there.
-    let previous = '__start__'
+    // Nodes can run in parallel, so "the previous node" is ambiguous. An edge counts as taken
+    // when its source finished after the target last started.
+    let tick = 0
+    const endedAt: Record<string, number> = { __start__: 0 }
+    const startedAt: Record<string, number> = {}
+    const edgesInto = (target: string) => {
+      const since = startedAt[target] ?? -1
+      return graph.edges
+        .filter((e) => e.target === target && (endedAt[e.source] ?? -1) > since)
+        .map((e) => edgeKey(e.source, e.target))
+    }
 
     setTrace({
       running: true,
@@ -342,13 +473,14 @@ export default function AgentsPage() {
         signal: controller.signal,
       })) {
         if (event.type === 'node' && event.status === 'start') {
-          const from = previous
+          const taken = edgesInto(event.name)
+          startedAt[event.name] = ++tick
           setTrace(
             (tr) =>
               tr && {
                 ...tr,
                 nodes: { ...tr.nodes, [event.name]: 'active' },
-                takenEdges: [...tr.takenEdges, edgeKey(from, event.name)],
+                takenEdges: [...tr.takenEdges, ...taken],
                 steps: [
                   ...tr.steps,
                   { name: event.name, startedAt: performance.now(), ms: null, tools: [] },
@@ -356,7 +488,7 @@ export default function AgentsPage() {
               }
           )
         } else if (event.type === 'node' && event.status === 'end') {
-          previous = event.name
+          endedAt[event.name] = ++tick
           setTrace((tr) => {
             if (!tr) return tr
             const steps = [...tr.steps]
@@ -382,7 +514,7 @@ export default function AgentsPage() {
           setTrace((tr) => tr && { ...tr, error: ta.run.failed })
         }
       }
-      const from = previous
+      const taken = edgesInto('__end__')
       setTrace(
         (tr) =>
           tr &&
@@ -391,7 +523,7 @@ export default function AgentsPage() {
             : {
                 ...tr,
                 nodes: { ...tr.nodes, __end__: 'done' },
-                takenEdges: [...tr.takenEdges, edgeKey(from, '__end__')],
+                takenEdges: [...tr.takenEdges, ...taken],
               })
       )
     } catch (err) {
@@ -411,6 +543,8 @@ export default function AgentsPage() {
     { color: 'bg-node-llm', label: ta.legend.llm },
     { color: 'bg-node-tool', label: ta.legend.tools },
     { color: 'bg-node-memory', label: ta.legend.memory },
+    { color: 'bg-node-guard', label: ta.legend.guard },
+    { color: 'bg-node-rag', label: ta.legend.rag },
   ]
 
   return (
@@ -433,7 +567,7 @@ export default function AgentsPage() {
         </li>
       </ul>
 
-      <div className="flex flex-col overflow-hidden rounded-lg border border-border md:h-[540px] md:flex-row">
+      <div className="flex flex-col overflow-hidden rounded-lg border border-border md:h-[640px] md:flex-row">
         <div className="h-[400px] w-full shrink-0 bg-background md:h-auto md:w-auto md:flex-1 md:shrink">
           {error ? (
             <div className="flex h-full items-center justify-center p-4">
@@ -457,11 +591,13 @@ export default function AgentsPage() {
             <ReactFlow
               nodes={nodes}
               edges={edges}
+              nodeTypes={NODE_TYPES}
+              nodesConnectable={false}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onNodeClick={onNodeClick}
               fitView
-              fitViewOptions={{ padding: 0.2 }}
+              fitViewOptions={{ padding: 0.08 }}
               minZoom={0.3}
               colorMode="dark"
               style={{ background: '#0c0e12' }}
@@ -540,7 +676,7 @@ export default function AgentsPage() {
                   <span className="w-5 shrink-0 text-right text-xs tabular-nums text-text-muted">
                     {i + 1}
                   </span>
-                  <span className="font-mono text-text-primary">{step.name}</span>
+                  <span className="font-mono text-text-primary">{step.name.split(':').pop()}</span>
                   {step.tools.length > 0 && (
                     <span className="min-w-0 truncate font-mono text-xs text-node-tool">
                       {step.tools.join(', ')}

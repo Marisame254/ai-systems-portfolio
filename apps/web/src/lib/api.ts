@@ -37,13 +37,12 @@ export async function getChatInfo(): Promise<ChatInfo> {
   return res.json()
 }
 
-export type GraphNodeName = 'load_memory' | 'agent' | 'tools' | 'save_memory'
-
 export type ChatStreamEvent =
   | { type: 'token'; text: string }
   | { type: 'tool_call'; name: string; args: unknown }
   | { type: 'tool_result'; name: string; result: string }
-  | { type: 'node'; name: GraphNodeName; status: 'start' | 'end' }
+  // `name` is the node's id in the graph from getAgentGraph (subgraph nodes are prefixed).
+  | { type: 'node'; name: string; status: 'start' | 'end' }
   | { type: 'error'; message: string }
 
 /** Reads a `data: {json}\n\n` event stream until `[DONE]` or the body ends. */
@@ -222,7 +221,9 @@ export interface AgentGraphNodeMeta {
 export interface AgentGraphNode {
   id: string
   label: string
-  type: 'start' | 'end' | 'tool' | 'llm' | string
+  type: 'start' | 'end' | 'tool' | 'llm' | 'memory' | 'guard' | 'rag' | string
+  /** Name of the subgraph this node belongs to, when it is not a top-level node. */
+  group?: string
   meta?: AgentGraphNodeMeta
 }
 
@@ -269,7 +270,12 @@ export interface SerializedMessage {
 
 export interface ThreadState {
   thread_id: string
-  values: { messages: SerializedMessage[] }
+  values: {
+    messages: SerializedMessage[]
+    /** Rolling summary of the turns no longer sent to the model verbatim. */
+    summary?: string | null
+    guardrail?: { verdict: 'allow' | 'block'; reason: string } | null
+  }
   next: string[]
   checkpoint_id: string | null
   created_at: string | null

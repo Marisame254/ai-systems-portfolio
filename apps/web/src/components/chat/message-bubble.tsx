@@ -4,6 +4,7 @@ import { useState } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import {
   Bot,
+  Briefcase,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -81,6 +82,7 @@ export function MarkdownContent({
 
 const TOOL_ICONS: Record<string, LucideIcon> = {
   search_user_documents: FileSearch,
+  search_portfolio: Briefcase,
   tavily_search: Globe,
   get_current_datetime: Clock,
 }

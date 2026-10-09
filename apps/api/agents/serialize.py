@@ -34,10 +34,12 @@ def serialize_message(msg: BaseMessage) -> dict[str, Any]:
 
 def serialize_state(state) -> dict[str, Any]:
     """Serialize a langgraph StateSnapshot for JSON transport."""
-    messages = state.values.get("messages", []) if state.values else []
+    values = state.values or {}
     return {
         "values": {
-            "messages": [serialize_message(m) for m in messages],
+            "messages": [serialize_message(m) for m in values.get("messages", [])],
+            "summary": values.get("summary"),
+            "guardrail": values.get("guardrail"),
         },
         "next": list(state.next) if state.next else [],
         "checkpoint_id": state.config.get("configurable", {}).get("checkpoint_id"),

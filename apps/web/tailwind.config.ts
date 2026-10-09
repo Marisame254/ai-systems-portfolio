@@ -17,6 +17,8 @@ const config: Config = {
         'node-llm': '#6cb6ff',
         'node-tool': '#b392f0',
         'node-memory': '#e3b341',
+        'node-guard': '#f47067',
+        'node-rag': '#39c5cf',
         'text-primary': '#e6e8ec',
         'text-secondary': '#a3aab8',
         'text-muted': '#7d8596',

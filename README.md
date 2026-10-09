@@ -6,7 +6,19 @@ Raul Vasquez's (Marisame) AI Systems Engineering portfolio — monorepo with a N
 User → Next.js UI → FastAPI Gateway → LangGraph Orchestrator
                                           ├── RAG (pgvector)
                                           ├── Long-term memory (Postgres store, vector-indexed)
-                                          └── Agent tools (web search, document search)
+                                          └── Agent tools (web search, document search, profile search)
+```
+
+The chat agent's graph (`apps/api/agents/chat_agent.py`):
+
+```
+START → guardrail ─block→ refuse → END
+            └allow→ load_memory → agent ⇄ tools
+                                    ⇅
+                                  document_search (subgraph):
+                                    retrieve → grade_documents → return_documents
+                                        ↑            └→ rewrite_query ┘
+                                  agent → save_memory (+ summarize on long threads) → END
 ```
 
 ## Stack
@@ -85,7 +97,7 @@ ai-systems-portfolio/
 
 | Demo | Description |
 |---|---|
-| AI Chat | Tool-calling LangGraph agent with token streaming, persistent threads, and checkpoint branching |
+| AI Chat | LangGraph agent with an input guardrail, tool calling, a corrective-RAG subgraph, conversation summarization, token streaming, persistent threads, and checkpoint branching |
 | RAG | Document upload, pgvector retrieval, streamed answers with numbered citations |
 | Agent Graph | Interactive view of the agent's graph with a live execution trace |
 | Memory | Long-term user facts in the LangGraph Postgres store, retrieved by semantic search |

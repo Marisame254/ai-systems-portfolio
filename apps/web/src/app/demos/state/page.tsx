@@ -159,6 +159,15 @@ function StateView({
       </div>
 
       <aside className="space-y-3 rounded-lg border border-border bg-surface p-4 text-xs">
+        {state.values.summary && (
+          <div>
+            <p className="font-mono text-xs text-text-muted">{ts.summaryLabel}</p>
+            <p className="mt-1 text-sm leading-relaxed text-text-secondary">
+              {state.values.summary}
+            </p>
+            <p className="mt-1 text-xs text-text-muted">{ts.summaryHint}</p>
+          </div>
+        )}
         <div>
           <p className="font-mono text-xs text-text-muted">
             {ts.nextNodes}

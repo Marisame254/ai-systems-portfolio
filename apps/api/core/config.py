@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     rag_top_k: int = 4
     # Chunks below this cosine similarity (0–1) are dropped. Tune per embedding model.
     rag_min_similarity: float = 0.2
+    # Query rewrites the document_search subgraph may try when grading finds nothing relevant.
+    rag_max_rewrites: int = 1
 
     # Long-term memory
     memory_max_per_user: int = 50
@@ -52,6 +54,12 @@ class Settings(BaseSettings):
     # Agent tools
     tavily_api_key: str = ""
     agent_max_iterations: int = 5
+    # LLM screening of each incoming message; False makes the guardrail node a pass-through.
+    guardrail_enabled: bool = True
+    # Past this many unsummarized messages, older turns are folded into a rolling summary
+    # and only the last `summary_keep_turns` user turns are sent to the model verbatim.
+    summary_trigger_messages: int = 12
+    summary_keep_turns: int = 2
 
     # Rate limits: requests per window, per client IP
     rate_limit_window_seconds: int = 60
