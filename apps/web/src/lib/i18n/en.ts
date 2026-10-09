@@ -26,10 +26,10 @@ export const en = {
       'I design and ship LLM agents that keep state, call tools and answer from your documents. Every demo on this site runs on the same LangGraph and FastAPI backend, so you can try the work instead of reading about it.',
     primaryCta: 'Try the live demos',
     secondaryCta: 'Read my CV',
-    graphCaption: 'The core loop of the graph that runs the chat demo.',
+    graphCaption: 'The graph that runs the chat demo.',
     graphLink: 'Watch it execute',
     graphAlt:
-      'Agent graph: start, load_memory, agent, a loop between agent and tools, save_memory, end.',
+      'Agent graph: start, then a guardrail that either refuses or continues to load_memory and agent. The agent loops with tools and with a document_search subgraph (retrieve, grade_documents, rewrite_query, return_documents), then finishes through save_memory and summarize.',
     buildTitle: 'What I build',
     build: {
       chat: {

@@ -28,10 +28,10 @@ export const es: Dictionary = {
       'Diseño y pongo en producción agentes LLM que mantienen estado, usan herramientas y responden a partir de tus documentos. Todos los demos de este sitio corren sobre el mismo backend de LangGraph y FastAPI, así que puedes probar el trabajo en lugar de solo leer sobre él.',
     primaryCta: 'Probar los demos',
     secondaryCta: 'Ver mi CV',
-    graphCaption: 'El ciclo central del grafo que ejecuta el demo de chat.',
+    graphCaption: 'El grafo que ejecuta el demo de chat.',
     graphLink: 'Verlo en ejecución',
     graphAlt:
-      'Grafo del agente: inicio, load_memory, agent, un ciclo entre agent y tools, save_memory, fin.',
+      'Grafo del agente: inicio, luego un guardrail que rechaza o continúa a load_memory y agent. El agente hace ciclos con tools y con el subgrafo document_search (retrieve, grade_documents, rewrite_query, return_documents), y termina pasando por save_memory y summarize.',
     buildTitle: 'Qué construyo',
     build: {
       chat: {

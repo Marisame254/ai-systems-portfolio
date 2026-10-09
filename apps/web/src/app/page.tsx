@@ -28,7 +28,7 @@ export default function HomePage() {
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6">
       {/* Hero */}
-      <section className="grid items-center gap-10 py-14 sm:py-20 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-16">
+      <section className="grid items-center gap-10 py-14 sm:py-20 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-14">
         <div>
           <h1 className="text-4xl font-semibold tracking-tight text-text-primary sm:text-6xl">
             {site.name}
@@ -79,7 +79,7 @@ export default function HomePage() {
           </ul>
         </div>
 
-        <figure className="mx-auto w-full max-w-[22rem] rounded-lg border border-border bg-surface/50 p-5">
+        <figure className="mx-auto w-full max-w-[26rem] rounded-lg border border-border bg-surface/50 p-5">
           <AgentGraphFigure label={h.graphAlt} />
           <figcaption className="mt-4 border-t border-border pt-4 text-sm text-text-secondary">
             {h.graphCaption}{' '}
