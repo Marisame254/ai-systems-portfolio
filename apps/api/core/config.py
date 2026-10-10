@@ -5,7 +5,7 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Repo root: apps/api/core/config.py → parents[3]
-ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
+ENV_PATH = Path(__file__).resolve() / ".env"
 
 
 class Settings(BaseSettings):
